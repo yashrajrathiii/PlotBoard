@@ -1,0 +1,293 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { Check, Copy, Link2, Send, Trash2, Users } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { copyText, whatsappShareUrl } from '../lib/share'
+
+interface Member {
+  id: string
+  name: string
+  phone: string
+  is_admin: boolean
+  created_at: string
+  email: string | null
+  joined: boolean
+}
+
+const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/
+
+interface FnError extends Error {
+  code?: string
+}
+
+async function callFn(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('invite-user', { body })
+  if (error) {
+    const errBody = await (error as { context?: Response }).context
+      ?.json()
+      .catch(() => null)
+    const e = new Error(errBody?.error ?? error.message) as FnError
+    e.code = errBody?.code
+    throw e
+  }
+  return data
+}
+
+/** Admin-only: invite members and manage the member/invite list. */
+export default function InvitePage() {
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState<'email' | 'link' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [alreadyInvited, setAlreadyInvited] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [inviteLink, setInviteLink] = useState<{ email: string; url: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [members, setMembers] = useState<Member[]>([])
+  const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const loadMembers = async () => {
+    try {
+      const data = await callFn({ action: 'list' })
+      setMembers((data.members ?? []) as Member[])
+    } catch {
+      // Fallback if the updated function isn't deployed yet: show what the
+      // client can read directly (no emails / joined status).
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name, phone, is_admin, created_at')
+        .order('created_at', { ascending: true })
+      setMembers(
+        (data ?? []).map((p) => ({ ...p, email: null, joined: false }) as Member),
+      )
+    }
+  }
+
+  useEffect(() => {
+    void loadMembers()
+  }, [])
+
+  const reset = () => {
+    setError(null)
+    setAlreadyInvited(false)
+    setSuccess(null)
+    setInviteLink(null)
+    setCopied(false)
+  }
+
+  const handleEmailInvite = async (e: FormEvent) => {
+    e.preventDefault()
+    reset()
+    if (!EMAIL_RE.test(email.trim())) {
+      setError('Enter a valid email address (no spaces or commas).')
+      return
+    }
+    setBusy('email')
+    try {
+      const data = await callFn({
+        action: 'invite',
+        email: email.trim(),
+        redirectTo: `${window.location.origin}/welcome`,
+      })
+      setSuccess(`Invite email sent to ${data.user.email}.`)
+      setEmail('')
+      void loadMembers()
+    } catch (err) {
+      const e = err as FnError
+      setError(e.message)
+      if (e.code === 'already_registered') setAlreadyInvited(true)
+    }
+    setBusy(null)
+  }
+
+  const handleLinkInvite = async () => {
+    reset()
+    if (!EMAIL_RE.test(email.trim())) {
+      setError('Enter a valid email address (no spaces or commas).')
+      return
+    }
+    setBusy('link')
+    try {
+      const data = await callFn({
+        action: 'link',
+        email: email.trim(),
+        redirectTo: `${window.location.origin}/welcome`,
+      })
+      if (data.link) setInviteLink({ email: data.user.email, url: data.link })
+      void loadMembers()
+    } catch (err) {
+      setError((err as FnError).message)
+    }
+    setBusy(null)
+  }
+
+  const handleRemove = async (m: Member) => {
+    const label = m.email || m.name || 'this member'
+    const verb = m.joined ? 'Remove' : 'Cancel the invite for'
+    if (!window.confirm(`${verb} ${label}? This cannot be undone.`)) return
+    setRemovingId(m.id)
+    try {
+      await callFn({ action: 'delete', userId: m.id })
+      await loadMembers()
+    } catch (err) {
+      window.alert((err as FnError).message)
+    }
+    setRemovingId(null)
+  }
+
+  const whatsappMessage = (link: { email: string; url: string }) =>
+    `You're invited to join *PlotBoard* — our shared property listing board.\n` +
+    `Tap this link to create your account (${link.email}):\n${link.url}`
+
+  return (
+    <div className="max-w-lg mx-auto p-4 space-y-6">
+      <form
+        onSubmit={(e) => void handleEmailInvite(e)}
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-3"
+      >
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <Send size={18} className="text-emerald-600" /> Invite a member
+        </h2>
+        <p className="text-sm text-gray-600">
+          Enter their email, then either send the invite by email or create a
+          link you can share on WhatsApp. Sign-ups without an invite are
+          disabled.
+        </p>
+        <input
+          type="email"
+          required
+          placeholder="broker@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={busy !== null}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-3 py-2.5"
+          >
+            {busy === 'email' ? 'Sending…' : 'Send email invite'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleLinkInvite()}
+            disabled={busy !== null}
+            className="flex-1 flex items-center justify-center gap-1.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 text-sm font-medium rounded-lg px-3 py-2.5"
+          >
+            <Link2 size={15} />
+            {busy === 'link' ? 'Creating…' : 'Get WhatsApp link'}
+          </button>
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {alreadyInvited && (
+          <p className="text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            This email is already in the list below. If they never got the
+            invite, tap <span className="font-medium">Get WhatsApp link</span> to
+            resend it, or <span className="font-medium">Cancel invite</span> below
+            and try again with the correct address.
+          </p>
+        )}
+        {success && <p className="text-sm text-emerald-700">{success}</p>}
+
+        {inviteLink && (
+          <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 space-y-2.5">
+            <p className="text-sm text-emerald-900">
+              Invite link for <span className="font-medium">{inviteLink.email}</span> —
+              share it only with them. It lands them straight on the sign-up
+              page and expires after first use / 24 hours.
+            </p>
+            <p className="text-xs text-emerald-800/70 break-all bg-white rounded-lg border border-emerald-100 p-2">
+              {inviteLink.url}
+            </p>
+            <div className="flex gap-2">
+              <a
+                href={whatsappShareUrl(whatsappMessage(inviteLink))}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-center bg-[#25D366] hover:brightness-95 text-white text-sm font-medium rounded-lg px-3 py-2"
+              >
+                Share on WhatsApp
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  void copyText(inviteLink.url).then((ok) => setCopied(ok))
+                }}
+                className="flex items-center justify-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-sm font-medium text-gray-700 rounded-lg px-3 py-2"
+              >
+                {copied ? (
+                  <>
+                    <Check size={14} className="text-emerald-600" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} /> Copy link
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </form>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+          <Users size={18} className="text-emerald-600" /> Members ({members.length})
+        </h2>
+        <ul className="divide-y divide-gray-100">
+          {members.map((m) => (
+            <li key={m.id} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+                  {m.name.trim() || m.email || 'Invited member'}
+                  {m.is_admin && (
+                    <span className="text-xs bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">
+                      admin
+                    </span>
+                  )}
+                  {!m.is_admin && (
+                    <span
+                      className={`text-[11px] rounded-full px-2 py-0.5 ${
+                        m.joined
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {m.joined ? 'joined' : 'invited'}
+                    </span>
+                  )}
+                </p>
+                {/* Show the email (and phone if joined) so pending/wrong
+                    invites are identifiable. */}
+                {m.email && (
+                  <p className="text-xs text-gray-500 truncate">{m.email}</p>
+                )}
+                {m.phone && <p className="text-xs text-gray-400">{m.phone}</p>}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-gray-400">
+                  {new Date(m.created_at).toLocaleDateString('en-IN')}
+                </span>
+                {!m.is_admin && (
+                  <button
+                    onClick={() => void handleRemove(m)}
+                    disabled={removingId === m.id}
+                    title={m.joined ? 'Remove member' : 'Cancel invite'}
+                    className="flex items-center gap-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2 py-1.5"
+                  >
+                    <Trash2 size={13} />
+                    {removingId === m.id
+                      ? '…'
+                      : m.joined
+                        ? 'Remove'
+                        : 'Cancel invite'}
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
