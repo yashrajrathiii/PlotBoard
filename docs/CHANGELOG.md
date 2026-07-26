@@ -1,177 +1,119 @@
 # Development Log
 
-A chronological record of how PlotBoard was built with Claude Code — what was
-done, in what order, and the reasoning behind the notable decisions. Newest
-entries are added at the top as work continues.
+A **dated running log** of changes to PlotBoard, newest first. Each dated
+section is one working session. Entries from the initial build (before the repo
+existed) are grouped under a single date range and broken down by feature
+stage.
 
-Format: each stage lists **what shipped** and, where relevant, **why**.
-
----
-
-## Stage 0 — Foundations
-
-**Supabase project & schema.** Created Supabase project `oiqqweqyamakfhubpbtk`
-(ap-south-1). Wrote and applied migrations 001–004:
-- **001** — enums, core tables (`profiles`, `listings`, `listing_media`,
-  `status_history`, `notifications`), triggers, the `update_listing_status`
-  RPC, and generated columns (`area_sqft`, `deal_value`).
-- **002** — Row Level Security policies, Data API grants (`anon` gets nothing),
-  realtime publication.
-- **003** — private `listing-media` Storage bucket + policies.
-- **004** — security hardening (pinned `search_path`, revoked EXECUTE on
-  trigger functions), from the Supabase advisor.
-
-**Project scaffold.** Vite + React + TypeScript + Tailwind 4, Supabase client,
-Leaflet, `browser-image-compression`, router. Env wired via `.env.local`.
-
-> **Key decision — invite-only.** No public sign-up. Chose Supabase Auth
-> invites driven by an admin-only Edge Function so the service-role key never
-> reaches the browser.
+Format going forward: add a new `## YYYY-MM-DD` heading at the top for each
+session, with bullets for what shipped and *why* where it matters.
 
 ---
 
-## Stage 1 — Auth, invites, devices, PWA
+## 2026-07-27
 
-- **Auth flow** — login page, `/welcome` set-password + profile page for
-  invitees, route guards (`Protected`): session → device → completed profile →
-  admin.
-- **2-device login limit** — added `user_devices` (migration 005) with a
-  DB trigger that hard-caps 2 devices per user. A third login shows a device
-  picker to evict one; the evicted device signs itself out (realtime + periodic
-  check). *Requested addition beyond the original spec.*
-- **Admin bootstrap** — the profile trigger auto-flags the admin email so the
-  first admin needs no manual SQL.
-- **Invite Edge Function** — `invite-user`, service-role, admin-gated. Emails
-  a Supabase invite; the in-app Invites page lets the admin send them.
-- **PWA** — manifest, generated icons, service worker (`vite-plugin-pwa`),
-  installable on phones. Mobile bottom tab bar + desktop sidebar shell.
+- **Settings is now a page, not a modal.** Moved settings to a `/settings`
+  route so the mobile bottom tab bar stays visible while in it. Mobile shows an
+  **Instagram-style list** of section rows (Details / Account / Devices), each
+  drilling into its own view with a back arrow; desktop keeps a two-pane
+  list + content layout. Removed the old `SettingsModal`.
+- **Instagram-style back buttons.** Added a reusable circular back control
+  (`BackButton`) and used it across the app: the listing **detail** page, the
+  **add / edit listing** form, and the **settings** section views. The
+  add-listing and settings back arrows return to Home.
+- **Changelog** switched to this dated running-log format.
 
 ---
 
-## Stage 2 — The listing board
+## 2026-07-23
 
-- **Board (list view)** — responsive card grid (3 per row on desktop, 1 on
-  mobile). Each card: a **photos ⇄ map** media carousel, deal value in Indian
-  compact format (₹ L / ₹ Cr), status chip, poster contact.
-- Fixed two bugs found during verification: area rounding (3.5 acre showed as
-  4) and Leaflet marker icons broken under Vite.
-- **Left sidebar navigation** — moved the desktop nav into a fixed left sidebar
-  (app name on top, links below, sign-out at the bottom). *User request.*
+First push to GitHub + documentation.
 
----
-
-## Stage 3 — Settings & navigation refinements
-
-Driven by a series of user requests:
-- **Settings modal** (Claude-style popup) with **Details**, **Account**, and
-  **Devices** sections. Fixed a z-index bug where Leaflet map layers painted
-  over the modal (`isolate` on cards + high modal z-index).
-- Moved **Details** into the settings popup; renamed the old "Profile" tab.
-- Moved **Sign out** into the settings popup (red, pinned to the bottom).
-- Removed the user's name from the sidebar bottom.
+- **Repository** — pushed the app to `github.com/yashrajrathiii/PlotBoard`
+  (for Vercel hosting). Added `vercel.json` (SPA rewrite so deep links / the
+  `/welcome` invite landing don't 404). Verified `.env.local`, `node_modules`,
+  and `dist` stay out of the repo — no secrets committed.
+- **Docs** — replaced the default Vite README with a project overview; added
+  `docs/` (DATABASE, DEPLOYMENT, and this CHANGELOG).
+- **Invite management** — extended the `invite-user` Edge Function with `list`
+  (members with **email** + joined status) and `delete` (cancel a pending
+  invite / remove a member); stricter email validation (rejects commas/spaces).
+  The Invites page now shows each member's email and a cancel/remove control,
+  so wrong or duplicate invites are identifiable and removable. Verified live.
 
 ---
 
-## Stage 4 — Add / edit listings
+## 2026-07-17 – 2026-07-23 · Initial build
 
-- **Migration 006** — replaced single `locality` with a **structured address**
-  (line1/line2, city, state, pincode) so out-of-Chhattisgarh properties work;
-  widened the coordinate check to an India bounding box; added the
-  `rate_visible` flag and the `Others` property type.
-- **Add-listing form** — address fields, property type, area + unit, **rate
-  with an eye toggle** (share/hide the rate from others), a Leaflet
-  **location picker** (tap the map / search a place / paste Google-Maps
-  coordinates or link / use my location), notes.
-- **Media pipeline** — up to 4 photos compressed client-side (≤1600 px,
-  ~500 KB) and 1 video with **duration + size checked before upload** (30 s /
-  20 MB). All limits centralized in `src/lib/limits.ts`.
+The full first build of the app, by feature stage.
 
-> **Key decision — rate privacy is app-level.** For a trusted invited group,
-> hiding the rate in the UI/shares is a courtesy curtain, not cryptographic
-> secrecy (the value is still in the row). Noted for a possible future
-> server-side hardening.
+### Stage 0 — Foundations
+Created Supabase project `oiqqweqyamakfhubpbtk` (ap-south-1). Migrations 001–004:
+enums + core tables (`profiles`, `listings`, `listing_media`, `status_history`,
+`notifications`), triggers, the `update_listing_status` RPC, generated columns
+(`area_sqft`, `deal_value`); RLS + Data API grants (`anon` gets nothing);
+private `listing-media` Storage bucket; security hardening. Scaffolded Vite +
+React + TS + Tailwind 4 with Supabase, Leaflet, and image compression.
 
----
+> **Decision — invite-only.** No public sign-up; Supabase Auth invites driven by
+> an admin-only Edge Function so the service-role key never reaches the browser.
 
-## Stage 5 — Public/Private, My Listings, detail view
+### Stage 1 — Auth, invites, devices, PWA
+Login, `/welcome` set-password + profile page, route guards. **2-device login
+limit** (`user_devices`, migration 005) with a DB trigger and a device-picker
+eviction screen. Admin bootstrap (profile trigger auto-flags the admin email).
+`invite-user` Edge Function + Invites page. **PWA** (manifest, icons, service
+worker) — installable on phones.
 
-- **Migration 007** — `visibility` column (`public`/`private`) enforced by
-  **RLS**: a private listing is never sent to anyone but its poster (verified
-  by querying as a simulated second user). Realtime and the status RPC respect
-  the same rule.
-- **Public / Private toggle** in the create/edit form (labeled buttons).
-- **My Listings** tab — the broker's own listings (public + private) with a
-  visibility badge.
-- **Single-listing detail page** (`/listing/:id`) — a full-size gallery
-  (photos + video + interactive map) on top, details below. Cards are now
-  clickable to open it.
-- **Edit/Delete moved into the detail view** (owner only) instead of the grid.
-- Made card footers line up across a row (full-height flex + `mt-auto`).
+### Stage 2 — The listing board
+Responsive card grid with a **photos ⇄ map** carousel per card, deal value in
+Indian compact format (₹ L / ₹ Cr), status chips. Moved desktop nav into a
+left sidebar. Fixed area-rounding and Leaflet-marker bugs.
 
----
+### Stage 3 — Settings & nav refinements
+Settings modal (Details / Account / Devices); fixed a z-index bug where map
+layers painted over the modal. Moved Details and Sign out into settings; tidied
+the sidebar. *(Settings later became a page — see 2026-07-27.)*
 
-## Stage 6 — Sharing
+### Stage 4 — Add / edit listings
+Migration 006: **structured address** (line1/2, city, state, pincode),
+India-wide coordinate check, `rate_visible` flag, `Others` property type
+(replaced `locality`). Add-listing form with a **rate show/hide toggle**, a
+Leaflet **location picker** (tap / search / paste Google-Maps coordinates / use
+my location), and a **client-side media pipeline** (≤4 photos compressed to
+~500 KB; 1 video with duration + size checked before upload). Limits centralized
+in `src/lib/limits.ts`.
 
-- **Per-card share** — WhatsApp (`wa.me` with the listing pre-filled — the user
-  just picks contacts) and copy-to-clipboard. Text includes type, address,
-  size, rate/total (respecting rate privacy), status, notes, a Google-Maps pin
-  link, and poster contact.
-- **WhatsApp invite links** — the Invites page can generate a shareable invite
-  link (no email) to send over WhatsApp; the recipient lands on the sign-up
-  page.
-- **Multi-select sharing** (WhatsApp-style) — a "Share" button and a
-  per-card "Select multiple" enter a selection mode with checkboxes; a bottom
-  bar copies/sends **all selected listings at once**.
-- **Link-preview suppression** — a leading zero-width space on the multi-share
-  WhatsApp text stops WhatsApp from heading the message with only the first
-  listing's map preview.
+> **Decision — rate privacy is app-level.** For a trusted invited group, hiding
+> the rate in the UI/shares is a courtesy curtain, not cryptographic secrecy.
 
----
+### Stage 5 — Public/Private, My Listings, detail view
+Migration 007: `visibility` (`public`/`private`) enforced by **RLS** — a private
+listing is never sent to anyone but its poster. Public/Private toggle in the
+form; **My Listings** tab; **single-listing detail page** (`/listing/:id`) with
+a full gallery; clickable cards; Edit/Delete moved into the detail view.
 
-## Stage 7 — Search & filters
+### Stage 6 — Sharing
+Per-card WhatsApp + copy; WhatsApp **invite links**; WhatsApp-style
+**multi-select** share bar (share several listings at once); zero-width-space
+trick to suppress WhatsApp's misleading single-listing link preview on
+multi-shares.
 
-- **`ListingResults`** component (shared by Home and My Listings): text search
-  (address / city / type / notes) plus a filter panel — city, property type,
-  status, area range (sq ft), rate range (₹/sqft) — with an active-filter
-  badge and a "no matches" state.
-- Fixed a latent horizontal-overflow bug on narrow cards (title truncation).
+### Stage 7 — Search & filters
+Shared `ListingResults`: text search + a filter panel (city, type, status, area
+range, rate range) with an active-filter badge and a "no matches" state.
 
----
+### Stage 8 — Real-time notifications
+Migration 008: `new_listing` and `sold` **broadcast** notification triggers.
+Frontend `NotificationsContext` subscribes to Realtime (RLS-scoped), keeps the
+unread count, and shows an **in-app toast** + an **OS pop-up** (service-worker
+`showNotification`). Notification **bell** with a dropdown panel. Verified
+end-to-end with a throwaway second account.
 
-## Stage 8 — Real-time notifications
+> **Known follow-up — Web Push.** OS pop-ups fire while the app is open/
+> backgrounded; true push when the app is **fully closed** needs VAPID keys +
+> a push-subscription table + a sender function + a SW `push` handler. Not built.
 
-- **Migration 008** — `on_listing_insert` notifies every other member of a new
-  **public** listing; `on_listing_status_change` also **broadcasts a "sold"**
-  notification to everyone (on top of the existing personal "someone changed
-  your listing" notification).
-- **Frontend** — `NotificationsContext` subscribes to Realtime on the
-  `notifications` table (RLS-scoped to the user), maintains the list + unread
-  count, and on each arrival shows an **in-app toast** and an **OS-level
-  pop-up** (via the service worker's `showNotification`).
-- **Notification bell** with unread badge + dropdown panel (mark-all-read, tap
-  to open the listing). "Turn on pop-up alerts" requests OS permission.
-- Placed the bell top-right (mobile top bar; later moved into the desktop board
-  header next to Share, per user request).
-- **Verified end-to-end** with a throwaway second account: adding a listing and
-  marking one sold both delivered live (bell badge 0→1→2, correct messages),
-  then all test data was cleaned up. Added a re-sync on channel subscribe to
-  close a first-event startup race found during testing.
-
-> **Known follow-up — Web Push.** OS pop-ups fire while the app is open or
-> backgrounded. True push when the app is **fully closed** needs Web Push
-> (VAPID keys + a `push_subscriptions` table + a sender function + a SW `push`
-> handler). Not yet built.
-
----
-
-## Stage 9 — Ship
-
-- **`vercel.json`** — SPA rewrite so deep links / refreshes / the `/welcome`
-  invite landing don't 404 in production.
-- Verified all flows at mobile width and confirmed PWA output (manifest, SW,
-  icons) stays intact.
-- Extended the `invite-user` function: **list members with emails + joined
-  status** and **cancel/remove invites**, so the admin can identify and clean
-  up wrong/pending invites. Stricter email validation (rejects commas/spaces).
-- **Pushed to GitHub** (`yashrajrathiii/PlotBoard`) and documented the repo
-  (this `docs/` folder + README).
+### Stage 9 — Ship prep
+`vercel.json` for SPA routing; verified all flows at mobile width and that the
+PWA output (manifest, SW, icons) stays intact.

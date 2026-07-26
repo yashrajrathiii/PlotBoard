@@ -1,106 +1,115 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import {
+  ChevronRight,
   KeyRound,
   LogOut,
   MonitorSmartphone,
   UserRound,
-  X,
+  type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, type DeviceRow } from '../context/AuthContext'
 import { getDeviceId } from '../lib/device'
 import { timeAgo } from '../lib/format'
+import BackButton from '../components/BackButton'
 
 type Section = 'details' | 'account' | 'devices'
 
+const SECTIONS: { id: Section; label: string; sub: string; icon: LucideIcon }[] = [
+  { id: 'details', label: 'Details', sub: 'Name & phone shown on your listings', icon: UserRound },
+  { id: 'account', label: 'Account', sub: 'Email & password', icon: KeyRound },
+  { id: 'devices', label: 'Devices', sub: 'Manage signed-in devices (max 2)', icon: MonitorSmartphone },
+]
+
 /**
- * Claude-style settings popup: dark overlay, panel with a section list on the
- * left and the active section's content on the right. Full-screen on phones.
+ * Settings as a real page (not a modal) so the bottom tab bar stays visible.
+ * Mobile: an Instagram-style list of section rows; tapping one drills into that
+ * section with a back arrow. Desktop: a two-pane list + content layout.
  */
-export default function SettingsModal({ onClose }: { onClose: () => void }) {
-  const [section, setSection] = useState<Section>('details')
+export default function SettingsPage() {
+  const [active, setActive] = useState<Section | null>(null)
   const { signOut } = useAuth()
 
-  // Escape closes, and the page behind must not scroll while open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
-    }
-  }, [onClose])
+  const sectionContent = (id: Section) =>
+    id === 'details' ? <DetailsSection /> : id === 'account' ? <AccountSection /> : <DevicesSection />
 
-  const sectionButton = (id: Section, icon: ReactNode, label: string) => (
-    <button
-      onClick={() => setSection(id)}
-      className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${
-        section === id
-          ? 'bg-emerald-50 text-emerald-700 font-medium'
-          : 'text-gray-600 hover:bg-gray-100'
-      }`}
-    >
-      {icon} {label}
-    </button>
-  )
+  const activeLabel = active ? SECTIONS.find((s) => s.id === active)!.label : 'Settings'
 
   return (
-    <div
-      className="fixed inset-0 z-[1200] bg-black/50 flex items-center justify-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white w-full h-full sm:h-[560px] sm:max-w-2xl sm:rounded-2xl shadow-xl flex flex-col sm:flex-row overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Settings"
-      >
-        {/* Section list, with sign-out pinned at the bottom */}
-        <div className="sm:w-48 shrink-0 border-b sm:border-b-0 sm:border-r border-gray-200 p-3 flex flex-col">
-          <p className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-            Settings
-          </p>
-          <div className="flex sm:flex-col gap-1">
-            {sectionButton('details', <UserRound size={16} />, 'Details')}
-            {sectionButton('account', <KeyRound size={16} />, 'Account')}
-            {sectionButton('devices', <MonitorSmartphone size={16} />, 'Devices')}
-          </div>
-          <div className="sm:mt-auto pt-2 sm:border-t sm:border-gray-200">
+    <div className="max-w-2xl mx-auto p-4">
+      {/* ---------- Mobile: row list → drill into a section ---------- */}
+      <div className="sm:hidden">
+        {active === null ? (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <BackButton to="/" label="Back to home" />
+              <h1 className="text-lg font-semibold text-gray-900">Settings</h1>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+              {SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setActive(s.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50"
+                >
+                  <s.icon size={20} className="text-gray-500 shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-gray-900">{s.label}</span>
+                    <span className="block text-xs text-gray-500">{s.sub}</span>
+                  </span>
+                  <ChevronRight size={18} className="text-gray-400 shrink-0" />
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => void signOut()}
-              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+              className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-medium text-red-600 hover:bg-red-50"
             >
               <LogOut size={16} /> Sign out
             </button>
-          </div>
-        </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <BackButton onClick={() => setActive(null)} label="Back to settings" />
+              <h1 className="text-lg font-semibold text-gray-900">{activeLabel}</h1>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-5">
+              {sectionContent(active)}
+            </div>
+          </>
+        )}
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex items-center justify-between px-5 pt-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {section === 'details' ? 'Details' : section === 'account' ? 'Account' : 'Devices'}
-            </h2>
-            <button
-              onClick={onClose}
-              aria-label="Close settings"
-              className="text-gray-400 hover:text-gray-600 p-1"
-            >
-              <X size={20} />
-            </button>
+      {/* ---------- Desktop: two-pane ---------- */}
+      <div className="hidden sm:block">
+        <h1 className="text-lg font-semibold text-gray-900 mb-4">Settings</h1>
+        <div className="flex gap-4">
+          <div className="w-56 shrink-0 self-start bg-white rounded-2xl border border-gray-200 p-3 flex flex-col">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setActive(s.id)}
+                className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
+                  (active ?? 'details') === s.id
+                    ? 'bg-emerald-50 text-emerald-700 font-medium'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <s.icon size={16} /> {s.label}
+              </button>
+            ))}
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <button
+                onClick={() => void signOut()}
+                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                <LogOut size={16} /> Sign out
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-5 pt-3">
-            {section === 'details' ? (
-              <DetailsSection />
-            ) : section === 'account' ? (
-              <AccountSection />
-            ) : (
-              <DevicesSection />
-            )}
+          <div className="flex-1 bg-white rounded-2xl border border-gray-200 p-5">
+            {sectionContent(active ?? 'details')}
           </div>
         </div>
       </div>
@@ -317,9 +326,7 @@ function DevicesSection() {
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Last active {timeAgo(d.last_seen)}
-                </p>
+                <p className="text-xs text-gray-500">Last active {timeAgo(d.last_seen)}</p>
               </div>
               {!isThis && (
                 <button

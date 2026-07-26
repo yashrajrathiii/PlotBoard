@@ -1,18 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { FolderOpen, LayoutList, MapPin, Send, Settings } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import SettingsModal from './SettingsModal'
 import NotificationBell from './NotificationBell'
 
 /**
- * App shell. Desktop: fixed left sidebar — app name on top, nav below;
- * pinned to the bottom: Details (profile), Settings (opens the popup), Sign
- * out. Mobile: slim top bar plus a fixed bottom tab bar.
+ * App shell. Desktop: fixed left sidebar — app name on top, nav below,
+ * Settings pinned to the bottom. Mobile: slim top bar (logo + notification
+ * bell) plus a fixed bottom tab bar. Settings is a route (/settings), so the
+ * bottom tab bar stays visible while in it.
  */
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
-  const [showSettings, setShowSettings] = useState(false)
 
   const sideLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm ${
@@ -20,9 +19,6 @@ export default function Layout({ children }: { children: ReactNode }) {
         ? 'bg-emerald-50 text-emerald-700 font-medium'
         : 'text-gray-600 hover:bg-gray-100'
     }`
-
-  const sideButtonClass =
-    'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100'
 
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center gap-0.5 text-xs px-3 py-1.5 rounded-lg ${
@@ -55,14 +51,13 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="mt-auto border-t border-gray-200 pt-3 flex flex-col gap-1">
-          <button onClick={() => setShowSettings(true)} className={sideButtonClass}>
+          <NavLink to="/settings" className={sideLinkClass}>
             <Settings size={18} /> Settings
-          </button>
+          </NavLink>
         </div>
       </aside>
 
-      {/* Mobile top bar — branding + notification bell (top-right). Settings
-          lives in the bottom tab bar. */}
+      {/* Mobile top bar — branding + notification bell (top-right). */}
       <header className="sm:hidden sticky top-0 z-20 bg-white border-b border-gray-200">
         <div className="px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -97,14 +92,12 @@ export default function Layout({ children }: { children: ReactNode }) {
               Invites
             </NavLink>
           )}
-          <button onClick={() => setShowSettings(true)} className={tabClass({ isActive: false })}>
+          <NavLink to="/settings" className={tabClass}>
             <Settings size={22} />
             Settings
-          </button>
+          </NavLink>
         </div>
       </nav>
-
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

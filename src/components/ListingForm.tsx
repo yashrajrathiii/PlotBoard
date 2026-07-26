@@ -16,6 +16,7 @@ import {
 import type { LatLng } from '../lib/geo'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
+import BackButton from './BackButton'
 
 interface PendingPhoto {
   file: File
@@ -288,9 +289,12 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
 
   return (
     <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-lg font-semibold text-gray-900 mb-4">
-        {isEdit ? 'Edit listing' : 'Add a listing'}
-      </h1>
+      <div className="flex items-center gap-3 mb-4">
+        <BackButton to={isEdit ? '/my-listings' : '/'} />
+        <h1 className="text-lg font-semibold text-gray-900">
+          {isEdit ? 'Edit listing' : 'Add a listing'}
+        </h1>
+      </div>
 
       <form
         onSubmit={(e) => void handleSubmit(e)}

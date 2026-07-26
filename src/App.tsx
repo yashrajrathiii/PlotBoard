@@ -14,6 +14,7 @@ import EditListingPage from './pages/EditListingPage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import MyListingsPage from './pages/MyListingsPage'
 import InvitePage from './pages/InvitePage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -86,6 +87,16 @@ export default function App() {
             <Protected adminOnly>
               <Layout>
                 <InvitePage />
+              </Layout>
+            </Protected>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <Protected>
+              <Layout>
+                <SettingsPage />
               </Layout>
             </Protected>
           }

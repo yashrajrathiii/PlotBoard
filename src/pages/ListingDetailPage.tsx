@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
   EyeOff,
   Globe,
   Lock,
@@ -19,6 +18,7 @@ import { FullScreenSpinner } from '../components/Protected'
 import { StatusChip } from '../components/ListingCard'
 import ListingGallery from '../components/ListingGallery'
 import ShareMenu from '../components/ShareMenu'
+import BackButton from '../components/BackButton'
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -81,12 +81,9 @@ export default function ListingDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-4">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-3"
-      >
-        <ArrowLeft size={16} /> Back
-      </button>
+      <div className="mb-3">
+        <BackButton />
+      </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Gallery: photos + video + map */}
