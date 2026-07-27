@@ -15,6 +15,7 @@ import {
 } from '../lib/types'
 import type { LatLng } from '../lib/geo'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
+import { deleteMedia, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
 import BackButton from './BackButton'
 
@@ -151,7 +152,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
   const removeExistingMedia = async (m: ListingMedia) => {
     if (!window.confirm('Remove this file from the listing? This cannot be undone.')) return
     setMediaBusy(true)
-    await supabase.storage.from('listing-media').remove([m.storage_path])
+    await deleteMedia([m])
     await supabase.from('listing_media').delete().eq('id', m.id)
     setExistingMedia(existingMedia.filter((x) => x.id !== m.id))
     setMediaBusy(false)
@@ -231,22 +232,23 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
     if (video) uploads.push({ file: video.file, media_type: 'video', position: 0 })
 
     for (const u of uploads) {
-      const ext = u.media_type === 'photo' ? 'jpg' : (u.file.name.split('.').pop() ?? 'mp4')
-      const path = `${listingId}/${crypto.randomUUID()}.${ext}`
-      const { error: uploadError } = await supabase.storage
-        .from('listing-media')
-        .upload(path, u.file, { contentType: u.file.type })
-      if (uploadError) {
-        uploadErrors.push(uploadError.message)
-        continue
+      try {
+        const { path, provider } = await uploadMedia({
+          listingId,
+          file: u.file,
+          mediaType: u.media_type,
+        })
+        const { error: mediaError } = await supabase.from('listing_media').insert({
+          listing_id: listingId,
+          media_type: u.media_type,
+          storage_path: path,
+          storage_provider: provider,
+          position: u.position,
+        })
+        if (mediaError) uploadErrors.push(mediaError.message)
+      } catch (e) {
+        uploadErrors.push(e instanceof Error ? e.message : String(e))
       }
-      const { error: mediaError } = await supabase.from('listing_media').insert({
-        listing_id: listingId,
-        media_type: u.media_type,
-        storage_path: path,
-        position: u.position,
-      })
-      if (mediaError) uploadErrors.push(mediaError.message)
     }
 
     setSubmitting(false)

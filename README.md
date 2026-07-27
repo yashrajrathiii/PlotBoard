@@ -44,8 +44,9 @@ owner/broker split. Invite-only, mobile-first, installable as a PWA.
 | Frontend   | React 19 · Vite · TypeScript                                      |
 | Styling    | Tailwind CSS 4                                                    |
 | Maps       | Leaflet + OpenStreetMap (no API key)                             |
-| Backend    | Supabase — Postgres, Auth, Row Level Security, Storage, Realtime |
-| Serverless | Supabase Edge Function (`invite-user`)                           |
+| Backend    | Supabase — Postgres, Auth, Row Level Security, Realtime          |
+| Media      | Cloudflare R2 (10 GB free, unlimited free egress)                |
+| Serverless | Supabase Edge Functions (`invite-user`, `media`)                 |
 | Media      | `browser-image-compression` (client-side)                        |
 | PWA        | `vite-plugin-pwa` (Workbox)                                      |
 | Hosting    | Vercel                                                            |
@@ -116,7 +117,9 @@ plotboard/
 ## Documentation
 
 - **[docs/DATABASE.md](docs/DATABASE.md)** — schema, every migration, RLS
-  policies, triggers, the notification model, and the Edge Function.
+  policies, triggers, the notification model, and the Edge Functions.
+- **[docs/STORAGE.md](docs/STORAGE.md)** — Cloudflare R2 setup, the cost model,
+  and how legacy Supabase files keep working alongside R2.
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Supabase + Vercel setup,
   environment variables, and post-deploy configuration.
 - **[docs/CHANGELOG.md](docs/CHANGELOG.md)** — the full development history:

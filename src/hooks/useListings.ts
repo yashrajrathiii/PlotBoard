@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Listing } from '../lib/types'
+import { LISTING_SELECT, type Listing } from '../lib/types'
+import { resolveMediaUrls } from '../lib/mediaStorage'
 
 /**
  * Loads the whole board (newest first) with poster contact and media rows,
- * then resolves signed URLs for the private bucket in one batch call.
- * Realtime refresh arrives in a later stage; `reload` covers manual cases.
+ * then resolves display URLs for the media. Files may live in Supabase Storage
+ * (legacy) or Cloudflare R2 (new) — the storage adapter handles both.
+ * `reload` covers manual refreshes.
  */
 export function useListings() {
   const [listings, setListings] = useState<Listing[]>([])
@@ -15,9 +17,7 @@ export function useListings() {
   const reload = useCallback(async () => {
     const { data, error } = await supabase
       .from('listings')
-      .select(
-        '*, poster:profiles!created_by(name, phone), listing_media(id, listing_id, media_type, storage_path, position)',
-      )
+      .select(LISTING_SELECT)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -31,21 +31,11 @@ export function useListings() {
       row.listing_media.sort((a, b) => a.position - b.position)
     }
 
-    // One signed-URL batch for every media file on the board (1 hour expiry).
-    const paths = rows.flatMap((l) => l.listing_media.map((m) => m.storage_path))
-    if (paths.length > 0) {
-      const { data: signed } = await supabase.storage
-        .from('listing-media')
-        .createSignedUrls(paths, 3600)
-      const urlByPath = new Map<string, string>()
-      for (const s of signed ?? []) {
-        if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl)
-      }
-      for (const row of rows) {
-        for (const m of row.listing_media) {
-          m.url = urlByPath.get(m.storage_path)
-        }
-      }
+    // One batch per storage provider for the whole board.
+    const allMedia = rows.flatMap((l) => l.listing_media)
+    const urlByPath = await resolveMediaUrls(allMedia)
+    for (const m of allMedia) {
+      m.url = urlByPath.get(m.storage_path)
     }
 
     setListings(rows)

@@ -10,6 +10,47 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-07-28
+
+**Listing media moved to Cloudflare R2** — text/relational data stays in
+Supabase. Supabase's free tier allows only 1 GB of storage and 5 GB/month of
+egress, which media would have exhausted after ~80 listings; R2 gives 10 GB
+free with **unlimited free egress**, which matters most here because browsing
+the board is almost entirely image downloads.
+
+- **Migration 009** — `listing_media.storage_provider` (`'supabase'`|`'r2'`),
+  an index for the sold-media sweep, and `media_pending_cleanup()`.
+- **`media` Edge Function** — holds the R2 credentials (never the browser) and
+  mints short-lived presigned URLs. **Authorization reuses RLS**: it queries
+  with the caller's JWT, so nobody can obtain a URL for a listing they can't
+  see. Actions: `upload-url`, `read-urls`, `delete`, `cleanup-sold`.
+- **`src/lib/mediaStorage.ts`** — the single module that talks to either store.
+  Reads always handle both providers, so **legacy Supabase files keep working
+  with no migration**. All six call sites (form, both hooks, edit page,
+  listing actions) now go through it.
+- **WebP photos** — `compressPhoto()` outputs WebP instead of JPEG, ~25-35%
+  smaller at the same quality. Existing JPEGs are unaffected.
+- **Sold-media cleanup** — photos/video of a listing are deleted 30 days after
+  it is marked Sold (the listing's text, price, and location stay forever).
+  This is what keeps storage bounded instead of growing without limit. Driven
+  off `status_history`, since R2 lifecycle rules can only expire by upload age.
+- **`VITE_MEDIA_PROVIDER`** gates where *new* uploads go (`supabase` by
+  default). Flipping it back is the rollback.
+- Docs: added `docs/STORAGE.md` (setup + payment structure).
+
+Bug caught during verification: the new shared query asked for
+`storage_provider` before migration 009 exists, which **blanked the entire
+board**. Switched to `listing_media(*)` so the frontend works either side of
+the migration — no deploy-order trap.
+
+Considered and rejected: rotating multiple free accounts to avoid ever paying.
+Beyond violating provider terms, it fails mechanically — free storage
+accumulates rather than rotating, and on an egress-capped provider like Storj
+the 25 GB/month allowance would break image loading within weeks (moving 25 GB
+between accounts would itself consume the entire monthly allowance).
+
+---
+
 ## 2026-07-27
 
 - **Settings is now a page, not a modal.** Moved settings to a `/settings`

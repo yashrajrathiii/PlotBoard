@@ -14,7 +14,11 @@ export function prettyBytes(n: number): string {
 
 /**
  * Client-side photo pipeline: reject oversized sources, then resize to
- * ≤1600px and recompress to roughly ≤500 KB JPEG before anything is uploaded.
+ * ≤1600px and recompress to roughly ≤500 KB before anything is uploaded.
+ *
+ * Output is WebP — ~25-35% smaller than JPEG at the same visual quality,
+ * which stretches the storage free tier considerably. Supported by every
+ * current browser (Safari 14+, 2020) on both desktop and mobile.
  */
 export async function compressPhoto(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) {
@@ -28,7 +32,7 @@ export async function compressPhoto(file: File): Promise<File> {
   return imageCompression(file, {
     maxWidthOrHeight: PHOTO_MAX_DIMENSION,
     maxSizeMB: PHOTO_TARGET_MB,
-    fileType: 'image/jpeg',
+    fileType: 'image/webp',
     initialQuality: 0.85,
     useWebWorker: true,
   })

@@ -111,11 +111,22 @@ from the API roles (they run as triggers, not RPCs).
 
 ## Storage
 
-One **private** bucket, `listing-media` (20 MB/file cap, image + common video
-MIME types). Path convention `<listing_id>/<uuid>.<ext>`. Policies: any signed-
-in user can read; uploads must be as self; only the uploader can delete their
-files. The app displays media via **signed URLs** (1-hour expiry), so nothing
-is publicly reachable.
+Media lives in **Cloudflare R2** (10 GB free + unlimited free egress); see
+**[STORAGE.md](STORAGE.md)** for setup and costs. Each `listing_media` row
+records `storage_provider`:
+
+- `'r2'` — new uploads; read via presigned URLs from the `media` Edge Function.
+- `'supabase'` — files predating the switch, still served from the original
+  private `listing-media` bucket (20 MB/file cap, image + video MIME types,
+  path `<listing_id>/<uuid>.<ext>`, RLS: any signed-in user reads, uploads as
+  self, only the uploader deletes).
+
+Both paths use **short-lived signed URLs** (1 hour), so no file is ever
+publicly reachable.
+
+`media_pending_cleanup(retention_days)` (definer, service-only) returns media
+belonging to listings marked **Sold** more than N days ago — the scheduled
+`cleanup-sold` sweep deletes those objects so storage stays bounded.
 
 ## Realtime
 
@@ -123,6 +134,20 @@ The `supabase_realtime` publication includes `listings`, `notifications`, and
 `user_devices`. Clients subscribe to Postgres-changes; RLS is applied to the
 stream, so each client only receives rows it may read (e.g. its own
 notifications).
+
+## Edge Function — `media`
+
+`supabase/functions/media/index.ts`. Holds the **R2 credentials** (never the
+browser) and mints short-lived presigned URLs. Authorization reuses RLS: the
+function queries with the *caller's* JWT, so members can't obtain URLs for
+listings they may not see.
+
+| action | Does |
+| --- | --- |
+| `upload-url` | caller must own the listing → presigned PUT URL + object path |
+| `read-urls` | batch presigned GET URLs, RLS-filtered to visible media |
+| `delete` | deletes objects the caller owns |
+| `cleanup-sold` | scheduled sweep (shared-secret auth) — drops media of listings sold > N days ago |
 
 ## Edge Function — `invite-user`
 
@@ -152,3 +177,4 @@ Email validation rejects spaces and commas to catch typos like
 | `006_address_rate_privacy.sql`         | structured address, India-wide coords, `rate_visible`, `Others` type (replaced `locality`) |
 | `007_listing_visibility.sql`           | `visibility` column + RLS/RPC updates for public/private            |
 | `008_broadcast_notifications.sql`      | `new_listing` + `sold` broadcast notification triggers              |
+| `009_media_storage_provider.sql`       | `listing_media.storage_provider` (`supabase`\|`r2`), sold-media index, `media_pending_cleanup()` |

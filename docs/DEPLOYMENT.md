@@ -34,6 +34,16 @@ Invite the admin email (`rathiyash12@gmail.com`) once — the `handle_new_user`
 trigger auto-sets `is_admin = true` for that address. Additional admins:
 `update public.profiles set is_admin = true where id = '<uuid>';`
 
+### 1e. Media storage (Cloudflare R2)
+Listing photos/video are stored in Cloudflare R2, not Supabase Storage. The
+bucket, API token, CORS policy, Edge Function secrets, and the sold-media
+cleanup schedule are all covered in **[STORAGE.md](STORAGE.md)** — including
+the cost model. Deploy the `media` function alongside `invite-user`:
+
+```bash
+supabase functions deploy media
+```
+
 ## 2. Vercel (frontend)
 
 1. **Import** the GitHub repo `yashrajrathiii/PlotBoard`. Vercel auto-detects
@@ -47,6 +57,7 @@ trigger auto-sets `is_admin = true` for that address. Additional admins:
    ```
    VITE_SUPABASE_URL=https://oiqqweqyamakfhubpbtk.supabase.co
    VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key: Supabase → Settings → API>
+   VITE_MEDIA_PROVIDER=r2      # omit or set 'supabase' to keep uploads on Supabase
    ```
 
    Add them to Production (and Preview if you want preview deploys to work).
@@ -82,7 +93,10 @@ the production URL they keep pointing at localhost.
 | ------------------------------- | ---------------- | ------- | -------------------------------------- |
 | `VITE_SUPABASE_URL`             | Vercel + `.env.local` | No | Project URL                             |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Vercel + `.env.local` | No | Browser-safe; RLS is the security line  |
+| `VITE_MEDIA_PROVIDER`           | Vercel + `.env.local` | No | `r2` or `supabase`; routes new uploads   |
 | `SUPABASE_SERVICE_ROLE_KEY`     | Supabase function env | **Yes** | Auto-injected; never in the repo      |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Supabase function env | **Yes** | R2 credentials — function only |
+| `CLEANUP_SECRET`                | Supabase function env | **Yes** | Guards the scheduled cleanup sweep      |
 
 ## Troubleshooting
 

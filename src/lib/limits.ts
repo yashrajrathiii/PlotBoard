@@ -18,3 +18,12 @@ export const VIDEO_LIMIT = 1
 /** Video hard caps, both checked in the browser before upload. */
 export const VIDEO_MAX_SECONDS = 30
 export const VIDEO_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
+
+/**
+ * Photos/video of a SOLD listing are deleted this many days after the sale by
+ * the scheduled `cleanup-sold` sweep. The listing itself — address, price,
+ * area, location — is kept forever; only the heavy files go. This is what
+ * keeps total storage bounded instead of growing without limit.
+ * Mirrored by the `retention_days` argument passed to the cleanup job.
+ */
+export const SOLD_MEDIA_RETENTION_DAYS = 30
