@@ -39,6 +39,14 @@ async function callFn(body: Record<string, unknown>) {
       error.message
     const e = new Error(message) as FnError
     e.code = errBody?.code
+
+    // A dead session must not present as a page-level failure. Sign out so
+    // the route guard sends the user to /login, instead of leaving them on a
+    // healthy-looking Invites page where every action silently 401s.
+    const status = (ctx as Response | undefined)?.status
+    if (status === 401 || e.code === 'session_expired') {
+      void supabase.auth.signOut()
+    }
     throw e
   }
   return data

@@ -52,7 +52,13 @@ Deno.serve(async (req: Request) => {
     const jwt = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
     const { data: userData, error: userError } = await admin.auth.getUser(jwt);
     if (userError || !userData.user) {
-      return json({ error: "Not authenticated" }, 401);
+      // Distinguish an expired/revoked session from a missing one so the
+      // client can sign the user out and re-prompt instead of showing a
+      // generic failure on an otherwise healthy-looking page.
+      return json({
+        error: "Your session has expired. Please sign in again.",
+        code: "session_expired",
+      }, 401);
     }
     const callerId = userData.user.id;
     const { data: profile } = await admin
@@ -128,7 +134,11 @@ Deno.serve(async (req: Request) => {
         email,
         options: { redirectTo: redirect },
       });
-      if (error && /already.*registered/i.test(error.message)) {
+      if (
+        error &&
+        ((error as { code?: string }).code === "email_exists" ||
+          /already.*(registered|exists)/i.test(error.message))
+      ) {
         ({ data, error } = await admin.auth.admin.generateLink({
           type: "magiclink",
           email,
@@ -177,10 +187,20 @@ Deno.serve(async (req: Request) => {
           });
         }
       }
+      // Supabase's built-in mailer is rate limited on the free tier; say so
+      // plainly and point at the link flow, which doesn't send email.
+      const rateLimited =
+        (error as { code?: string }).code === "over_email_send_rate_limit" ||
+        /rate limit/i.test(error.message);
+
       return json(
         {
-          error: already ? "This email has already been invited." : error.message,
-          code: already ? "already_registered" : undefined,
+          error: already
+            ? "This email has already been invited."
+            : rateLimited
+              ? 'Supabase\'s email limit was hit. Use "Get WhatsApp link" instead — it doesn\'t send email.'
+              : error.message,
+          code: already ? "already_registered" : rateLimited ? "rate_limited" : undefined,
         },
         400,
       );

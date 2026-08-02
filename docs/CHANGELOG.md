@@ -31,7 +31,18 @@ session, with bullets for what shipped and *why* where it matters.
   page and included in shares.
 - **`front`** is optional, a road-facing **length** (not an area).
 
-**Invite bug — two real defects fixed:**
+**Invite bug — root cause found in the logs: a dead session.** The Edge
+Function logs showed `POST /invite-user → 401` while the auth log at the same
+timestamp showed `"Session not found"`, minutes after a logout — and earlier,
+`Invalid Refresh Token: Refresh Token Not Found`. The app was holding a stale
+token after its session ended and kept calling the function with it, so every
+invite failed while the page still looked signed in. Fixed on both sides: the
+function now returns `code: "session_expired"` with a clear message, and the
+client signs out on a 401 so the route guard sends the user to `/login`
+instead of stranding them. Also surfaced Supabase's free-tier mail rate limit
+as a real message pointing at the WhatsApp-link flow, which sends no email.
+
+**Invite bug — two further defects fixed:**
 
 - `callFn` called `error.context.json()` unconditionally. For a
   `FunctionsFetchError` (network, CORS, function not deployed) `context` is a
