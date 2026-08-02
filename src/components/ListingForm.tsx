@@ -8,6 +8,8 @@ import {
   PROPERTY_TYPES,
   type AreaUnit,
   type ContactType,
+  type FrontUnit,
+  type RateUnit,
   type Listing,
   type ListingMedia,
   type ListingStatus,
@@ -76,6 +78,9 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
   const [area, setArea] = useState(existing ? String(existing.area) : '')
   const [unit, setUnit] = useState<AreaUnit>(existing?.area_unit ?? 'sqft')
   const [rate, setRate] = useState(existing ? String(existing.rate) : '')
+  const [rateUnit, setRateUnit] = useState<RateUnit>(existing?.rate_unit ?? 'sqft')
+  const [front, setFront] = useState(existing?.front != null ? String(existing.front) : '')
+  const [frontUnit, setFrontUnit] = useState<FrontUnit>(existing?.front_unit ?? 'ft')
   const [rateVisible, setRateVisible] = useState(existing?.rate_visible ?? true)
   const [contactType, setContactType] = useState<ContactType>(
     existing?.contact_type ?? 'Broker',
@@ -171,6 +176,10 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
     }
     if (!areaNum || areaNum <= 0) return setError('Area must be a positive number.')
     if (!rateNum || rateNum <= 0) return setError('Rate must be a positive number.')
+    const frontNum = front.trim() ? parseFloat(front) : null
+    if (front.trim() && (!frontNum || frontNum <= 0)) {
+      return setError('Front must be a positive number, or leave it empty.')
+    }
     if (!coords) return setError('Drop the location pin on the map.')
 
     setSubmitting(true)
@@ -186,6 +195,9 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
       area: areaNum,
       area_unit: unit,
       rate: rateNum,
+      rate_unit: rateUnit,
+      front: frontNum,
+      front_unit: frontUnit,
       rate_visible: rateVisible,
       contact_type: contactType,
       notes: notes.trim() || null,
@@ -442,18 +454,51 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
               </select>
             </Field>
           </div>
-          <Field label="Rate (₹ per sqft)">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Front (road-facing)" optional>
+              <input
+                type="number"
+                min="0.01"
+                step="any"
+                placeholder="e.g. 30"
+                value={front}
+                onChange={(e) => setFront(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Front unit">
+              <select
+                value={frontUnit}
+                onChange={(e) => setFrontUnit(e.target.value as FrontUnit)}
+                className={inputClass}
+              >
+                <option value="ft">feet</option>
+                <option value="m">metres</option>
+              </select>
+            </Field>
+          </div>
+
+          <Field label={`Rate (₹ per ${rateUnit === 'acre' ? 'acre' : 'sqft'})`}>
             <div className="flex gap-2">
               <input
                 type="number"
                 required
                 min="0.01"
                 step="any"
-                placeholder="e.g. 1850"
+                placeholder={rateUnit === 'acre' ? 'e.g. 8000000' : 'e.g. 1850'}
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
                 className={inputClass}
               />
+              <select
+                value={rateUnit}
+                onChange={(e) => setRateUnit(e.target.value as RateUnit)}
+                aria-label="Rate unit"
+                className="shrink-0 rounded-lg border border-gray-300 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="sqft">/sqft</option>
+                <option value="acre">/acre</option>
+              </select>
               <button
                 type="button"
                 onClick={() => setRateVisible(!rateVisible)}

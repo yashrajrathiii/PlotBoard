@@ -13,7 +13,14 @@ import { useListing } from '../hooks/useListing'
 import { useAuth } from '../context/AuthContext'
 import { deleteListing } from '../lib/listingActions'
 import { addressLines, type Listing } from '../lib/types'
-import { formatAreaEntered, formatINR, formatINRCompact, timeAgo } from '../lib/format'
+import {
+  formatAreaEntered,
+  formatFront,
+  formatINR,
+  formatINRCompact,
+  formatRateEntered,
+  timeAgo,
+} from '../lib/format'
 import { FullScreenSpinner } from '../components/Protected'
 import { StatusChip } from '../components/ListingCard'
 import ListingGallery from '../components/ListingGallery'
@@ -129,9 +136,14 @@ export default function ListingDetailPage() {
             <DetailRow label="Total area">
               {formatAreaEntered(listing.area, listing.area_unit)}
             </DetailRow>
+            {listing.front != null && (
+              <DetailRow label="Front (road-facing)">
+                {formatFront(listing.front, listing.front_unit)}
+              </DetailRow>
+            )}
             <DetailRow label="Rate">
               {canSeeRate ? (
-                `${formatINR(listing.rate)}/sqft`
+                formatRateEntered(listing.rate, listing.rate_unit)
               ) : (
                 <span className="inline-flex items-center gap-1 text-gray-400">
                   <EyeOff size={13} /> On request

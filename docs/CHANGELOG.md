@@ -10,6 +10,50 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-07-29
+
+**Phase 1 of the maps/capture round: invite fixes + `front` + per-acre rates.**
+
+- **Migration 010** — `front` + `front_unit` (ft/m), `rate_unit` (sqft/acre),
+  a generated `rate_per_sqft`, and a regenerated `deal_value`.
+- **Per-acre rates.** Rates can now be quoted per acre as well as per sqft.
+  `deal_value` converts the *area* into the rate's unit rather than normalising
+  the rate to ₹/sqft — algebraically identical, but `rate / 43560` is a
+  non-terminating decimal that Postgres numeric truncates, which would have
+  stored ₹1,59,99,999.9999… for "2 acres @ ₹80,00,000/acre".
+- **Filter bug prevented.** `ListingResults` compared raw `rate`, so a
+  "max ₹5,000/sqft" filter would have matched *every* per-acre listing once
+  mixed units existed (acre rates are in the millions). It now compares
+  `rate_per_sqft`, mirroring how the area filter already uses `area_sqft`.
+- **`formatRateEntered` / `formatFront`** replace four hardcoded `/sqft`
+  strings — card, detail page, and the **WhatsApp share text**, where a wrong
+  unit would have been the most visible failure. Front is shown on the detail
+  page and included in shares.
+- **`front`** is optional, a road-facing **length** (not an area).
+
+**Invite bug — two real defects fixed:**
+
+- `callFn` called `error.context.json()` unconditionally. For a
+  `FunctionsFetchError` (network, CORS, function not deployed) `context` is a
+  plain Error with no `.json`, so it threw
+  `TypeError: ...json is not a function` and buried the actual cause. Now
+  type-checked, with a fallback through the platform's `{code, message}` shape.
+- `loadMembers` swallowed every failure in a bare `catch {}` and silently
+  rendered a profiles-only list — the page looked healthy while every function
+  call failed, which is exactly why this was hard to diagnose. It now shows a
+  visible "couldn't reach the invite service" banner with the real reason and
+  logs to the console.
+- **Re-invites no longer dead-end.** An already-invited address could never be
+  re-invited by email. The `invite` action now falls back to generating a fresh
+  sign-in link and returns it, and matches on GoTrue's `email_exists` code
+  rather than only a drifting error message.
+
+Also: corrected `docs/STORAGE.md`, which projected a 1.4 GB steady state based
+on ~30 listings/month. At 20 brokers posting 100-150/month it is **~5.6-8 GB**,
+which makes the 30-day sold-media cleanup load-bearing rather than optional.
+
+---
+
 ## 2026-07-28
 
 **Listing media moved to Cloudflare R2** — text/relational data stays in

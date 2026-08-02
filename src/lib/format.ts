@@ -29,6 +29,24 @@ export function formatAreaEntered(area: number, unit: 'acre' | 'sqft'): string {
   return `${inrArea.format(area)} ${unit}`
 }
 
+/**
+ * "₹1,850/sqft" / "₹80,00,000/acre" — in the unit the poster quoted.
+ * Always use this rather than hardcoding "/sqft", or per-acre listings will be
+ * misreported (most damagingly in the WhatsApp share text).
+ *
+ * The unit defaults to 'sqft' so this renders correctly against a database
+ * where migration 010 hasn't run yet (the column is simply absent) — matching
+ * the old behaviour exactly rather than printing "/undefined".
+ */
+export function formatRateEntered(rate: number, unit: 'sqft' | 'acre' = 'sqft'): string {
+  return `${formatINR(rate)}/${unit ?? 'sqft'}`
+}
+
+/** "30 ft" / "9.5 m" — road frontage as entered. */
+export function formatFront(front: number, unit: 'ft' | 'm' = 'ft'): string {
+  return `${inrArea.format(front)} ${unit ?? 'ft'}`
+}
+
 export function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
   if (mins < 1) return 'just now'

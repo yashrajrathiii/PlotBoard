@@ -10,6 +10,10 @@ export const PROPERTY_TYPES = [
 export type PropertyType = (typeof PROPERTY_TYPES)[number]
 
 export type AreaUnit = 'acre' | 'sqft'
+/** Rates may be quoted per sqft or per acre (common for agricultural land). */
+export type RateUnit = 'sqft' | 'acre'
+/** Frontage is a length, so it gets its own unit domain. */
+export type FrontUnit = 'ft' | 'm'
 export type ListingStatus = 'Available' | 'Under discussion' | 'Sold'
 export type ContactType = 'Owner direct' | 'Broker'
 export type Visibility = 'public' | 'private'
@@ -43,6 +47,13 @@ export interface Listing {
   area: number
   area_unit: AreaUnit
   rate: number
+  /** Unit `rate` was quoted in. */
+  rate_unit: RateUnit
+  /** `rate` normalised to ₹/sqft — always filter/compare on this, not `rate`. */
+  rate_per_sqft: number
+  /** Road-facing frontage as a LENGTH (see front_unit). Optional. */
+  front: number | null
+  front_unit: FrontUnit
   /** Poster's choice: do other members see the rate (and total)? */
   rate_visible: boolean
   /** public = on everyone's board; private = poster's own reference only. */

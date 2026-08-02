@@ -53,14 +53,29 @@ You'd use well under **1%** of either allowance. Treat operations as free.
 ### What this means in practice
 
 With WebP photos (~350 KB each) a listing averages ~2 MB without video, ~20 MB
-with. Because **media of sold listings is deleted 30 days after the sale**,
-storage reaches a *steady state* rather than growing forever:
+with — call it ~8 MB typical. Because **media of sold listings is deleted 30
+days after the sale**, storage reaches a *steady state* rather than growing
+forever.
 
-> ~180 active listings × ~8 MB ≈ **1.4 GB** — comfortably inside the free
-> 10 GB, indefinitely.
+Sized for the real team of **20 brokers**, assuming a listing sells in about
+six months:
 
-So the realistic expected bill is **₹0/month**, with a worst case of a few
-hundred rupees only if the board grows far beyond current expectations.
+| Scenario | New listings/month | Active listings | Media stored |
+| --- | --- | --- | --- |
+| Expected | 100 | ~700 | **~5.6 GB** |
+| Heavy | 150 | ~1,000 | **~8.0 GB** |
+
+Both sit inside the free 10 GB, so the expected bill is **₹0/month**. But the
+margin is thinner than it looks, which makes one thing important:
+
+> **The 30-day sold-media cleanup is load-bearing, not optional.** Without it,
+> the heavy case fills 10 GB in roughly 8 months and keeps growing. Verify the
+> cron job is actually running (step 8 below).
+
+If you do overflow, it stays trivial: 15 GB costs $0.075/month (~₹7).
+
+*These are estimates from assumed usage. Once the app has a month of real
+traffic, check the R2 dashboard and re-run these numbers against it.*
 
 Two practical notes:
 - **R2 requires a payment method on file** even to use the free tier. You are

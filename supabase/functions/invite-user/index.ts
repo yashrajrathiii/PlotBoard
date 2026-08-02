@@ -150,12 +150,36 @@ Deno.serve(async (req: Request) => {
       redirectTo: redirect,
     });
     if (error) {
-      const already = /already.*registered/i.test(error.message);
+      // Match on the error code first — GoTrue's wording drifts between
+      // versions, and relying on the message alone has silently broken this
+      // path before. Fall back to the message for older versions.
+      const already =
+        (error as { code?: string }).code === "email_exists" ||
+        /already.*(registered|exists)/i.test(error.message);
+
+      if (already) {
+        // Don't dead-end: an already-invited address can never be re-invited
+        // by email, so hand back a fresh usable link instead of an error the
+        // admin can do nothing about.
+        const { data: linkData } = await admin.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+          options: { redirectTo: redirect },
+        });
+        if (linkData?.properties?.action_link) {
+          return json({
+            ok: true,
+            code: "already_registered",
+            link: linkData.properties.action_link,
+            user: { id: linkData.user.id, email: linkData.user.email },
+            notice:
+              "This email was already invited, so we generated a fresh sign-in link you can share instead.",
+          });
+        }
+      }
       return json(
         {
-          error: already
-            ? "This email has already been invited."
-            : error.message,
+          error: already ? "This email has already been invited." : error.message,
           code: already ? "already_registered" : undefined,
         },
         400,

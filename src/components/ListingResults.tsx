@@ -19,10 +19,21 @@ interface Props {
 const fieldClass =
   'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: ReactNode
+}) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-gray-500 mb-1">{label}</span>
+      <span className="block text-xs font-medium text-gray-500 mb-1">
+        {label}
+        {hint && <span className="ml-1 font-normal text-gray-400">({hint})</span>}
+      </span>
       {children}
     </label>
   )
@@ -87,8 +98,12 @@ export default function ListingResults({
       if (status && l.status !== status) return false
       if (!Number.isNaN(aMin) && l.area_sqft < aMin) return false
       if (!Number.isNaN(aMax) && l.area_sqft > aMax) return false
-      if (!Number.isNaN(rMin) && l.rate < rMin) return false
-      if (!Number.isNaN(rMax) && l.rate > rMax) return false
+      // Compare on the normalised ₹/sqft, never the raw rate: an acre-quoted
+      // rate is a number in the millions, so filtering on `rate` would make a
+      // "max ₹5,000/sqft" filter match every per-acre listing.
+      const ratePerSqft = l.rate_per_sqft ?? l.rate
+      if (!Number.isNaN(rMin) && ratePerSqft < rMin) return false
+      if (!Number.isNaN(rMax) && ratePerSqft > rMax) return false
       return true
     })
   }, [listings, q, city, type, status, areaMin, areaMax, rateMin, rateMax])
@@ -215,7 +230,7 @@ export default function ListingResults({
                 className={fieldClass}
               />
             </Field>
-            <Field label="Min rate (₹/sqft)">
+            <Field label="Min rate (₹/sqft)" hint="acre-quoted listings are converted">
               <input
                 type="number"
                 inputMode="numeric"

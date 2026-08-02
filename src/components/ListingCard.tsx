@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, EyeOff, Globe, Lock, MapPin, Phone, UserRound } from 'lucide-react'
 import { addressLines, type Listing, type ListingStatus } from '../lib/types'
-import { formatAreaEntered, formatINR, formatINRCompact, timeAgo } from '../lib/format'
+import {
+  formatAreaEntered,
+  formatINR,
+  formatINRCompact,
+  formatRateEntered,
+  timeAgo,
+} from '../lib/format'
 import { useAuth } from '../context/AuthContext'
 import { useShareSelection } from '../context/ShareSelectionContext'
 import MediaCarousel from './MediaCarousel'
@@ -190,7 +196,11 @@ export default function ListingCard({
           <div className="flex items-center justify-between">
             <dt className="text-sm text-gray-500">Rate</dt>
             <dd className="text-sm text-gray-900">
-              {canSeeRate ? `${formatINR(listing.rate)}/sqft` : <RateHidden />}
+              {canSeeRate ? (
+                formatRateEntered(listing.rate, listing.rate_unit)
+              ) : (
+                <RateHidden />
+              )}
             </dd>
           </div>
           {canSeeRate && (
@@ -260,7 +270,7 @@ export default function ListingCard({
             <p className="text-sm text-gray-600">
               {canSeeRate ? (
                 <>
-                  {formatINR(listing.rate)}/sqft
+                  {formatRateEntered(listing.rate, listing.rate_unit)}
                   <span
                     className="ml-2 font-semibold text-emerald-700"
                     title={formatINR(listing.deal_value)}

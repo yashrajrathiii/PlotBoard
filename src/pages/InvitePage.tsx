@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Check, Copy, Link2, Send, Trash2, Users } from 'lucide-react'
+import { AlertTriangle, Check, Copy, Link2, Send, Trash2, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { copyText, whatsappShareUrl } from '../lib/share'
 
@@ -22,10 +22,22 @@ interface FnError extends Error {
 async function callFn(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('invite-user', { body })
   if (error) {
-    const errBody = await (error as { context?: Response }).context
-      ?.json()
-      .catch(() => null)
-    const e = new Error(errBody?.error ?? error.message) as FnError
+    // `error.context` is a Response only for HTTP errors. For a
+    // FunctionsFetchError (network down, CORS, function not deployed) it's a
+    // plain Error with no .json method — calling it there throws a TypeError
+    // that masks the real cause, so check before using it.
+    const ctx = (error as { context?: unknown }).context
+    let errBody: { error?: string; code?: string } | null = null
+    if (ctx && typeof (ctx as Response).json === 'function') {
+      errBody = await (ctx as Response).json().catch(() => null)
+    }
+    // The platform's own JWT rejection returns {code, message} with no `error`
+    // key, so fall back through message before the generic supabase text.
+    const message =
+      errBody?.error ??
+      (errBody as { message?: string } | null)?.message ??
+      error.message
+    const e = new Error(message) as FnError
     e.code = errBody?.code
     throw e
   }
@@ -43,14 +55,20 @@ export default function InvitePage() {
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [degraded, setDegraded] = useState<string | null>(null)
 
   const loadMembers = async () => {
     try {
       const data = await callFn({ action: 'list' })
       setMembers((data.members ?? []) as Member[])
-    } catch {
-      // Fallback if the updated function isn't deployed yet: show what the
-      // client can read directly (no emails / joined status).
+      setDegraded(null)
+    } catch (err) {
+      // Fall back to what the client can read directly (no emails / joined
+      // status) — but SAY SO. Silently rendering a healthy-looking list here
+      // is what made the invite failure so hard to diagnose: the page looked
+      // fine while every function call was failing.
+      const reason = err instanceof Error ? err.message : String(err)
+      console.error('invite-user "list" failed:', err)
       const { data } = await supabase
         .from('profiles')
         .select('id, name, phone, is_admin, created_at')
@@ -58,6 +76,7 @@ export default function InvitePage() {
       setMembers(
         (data ?? []).map((p) => ({ ...p, email: null, joined: false }) as Member),
       )
+      setDegraded(reason)
     }
   }
 
@@ -87,8 +106,15 @@ export default function InvitePage() {
         email: email.trim(),
         redirectTo: `${window.location.origin}/welcome`,
       })
-      setSuccess(`Invite email sent to ${data.user.email}.`)
-      setEmail('')
+      if (data.link) {
+        // Already invited: the function returned a fresh shareable link rather
+        // than dead-ending, so show it exactly like the WhatsApp-link flow.
+        setInviteLink({ email: data.user.email, url: data.link })
+        setSuccess(data.notice ?? 'This email was already invited — share the link below.')
+      } else {
+        setSuccess(`Invite email sent to ${data.user.email}.`)
+        setEmail('')
+      }
       void loadMembers()
     } catch (err) {
       const e = err as FnError
@@ -180,7 +206,7 @@ export default function InvitePage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {alreadyInvited && (
-          <p className="text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+          <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
             This email is already in the list below. If they never got the
             invite, tap <span className="font-medium">Get WhatsApp link</span> to
             resend it, or <span className="font-medium">Cancel invite</span> below
@@ -234,6 +260,21 @@ export default function InvitePage() {
         <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
           <Users size={18} className="text-emerald-600" /> Members ({members.length})
         </h2>
+
+        {degraded && (
+          <div className="mb-3 flex gap-2 text-xs text-red-900 bg-red-50 border border-red-200 rounded-lg p-2.5">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-600" />
+            <span>
+              <span className="font-medium">
+                Couldn't reach the invite service — showing a limited list.
+              </span>{' '}
+              Emails and joined/invited status are unavailable, and inviting or
+              removing members will fail until this is resolved.
+              <span className="block mt-1 font-mono break-all opacity-80">{degraded}</span>
+            </span>
+          </div>
+        )}
+
         <ul className="divide-y divide-gray-100">
           {members.map((m) => (
             <li key={m.id} className="py-3 flex items-center justify-between gap-3">

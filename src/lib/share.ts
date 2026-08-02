@@ -1,5 +1,5 @@
 import { addressOneLine, type Listing } from './types'
-import { formatAreaEntered, formatINR } from './format'
+import { formatAreaEntered, formatINR, formatFront, formatRateEntered } from './format'
 
 /**
  * The text block shared via WhatsApp / clipboard. *asterisks* render as bold
@@ -13,8 +13,12 @@ export function buildShareText(l: Listing, canSeeRate: boolean): string {
     `Address: ${addressOneLine(l)}`,
     `Size: ${formatAreaEntered(l.area, l.area_unit)}`,
   ]
+  if (l.front) lines.push(`Front: ${formatFront(l.front, l.front_unit)}`)
   if (canSeeRate) {
-    lines.push(`Rate: ${formatINR(l.rate)}/sqft`, `Total: ${formatINR(l.deal_value)}`)
+    lines.push(
+      `Rate: ${formatRateEntered(l.rate, l.rate_unit)}`,
+      `Total: ${formatINR(l.deal_value)}`,
+    )
   } else {
     lines.push('Rate: On request')
   }
