@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ShareSelectionProvider } from './context/ShareSelectionContext'
 import { NotificationsProvider } from './context/NotificationsContext'
+import { ListingFiltersProvider } from './context/ListingFiltersContext'
 import ShareSelectionBar from './components/ShareSelectionBar'
 import NotificationToast from './components/NotificationToast'
 import Protected from './components/Protected'
@@ -13,6 +14,7 @@ import AddListingPage from './pages/AddListingPage'
 import EditListingPage from './pages/EditListingPage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import MyListingsPage from './pages/MyListingsPage'
+import MapViewPage from './pages/MapViewPage'
 import InvitePage from './pages/InvitePage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -20,6 +22,7 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationsProvider>
+        <ListingFiltersProvider>
         <ShareSelectionProvider>
           <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -72,6 +75,16 @@ export default function App() {
           }
         />
         <Route
+          path="/map"
+          element={
+            <Protected>
+              <Layout>
+                <MapViewPage />
+              </Layout>
+            </Protected>
+          }
+        />
+        <Route
           path="/my-listings"
           element={
             <Protected>
@@ -106,6 +119,7 @@ export default function App() {
           <ShareSelectionBar />
           <NotificationToast />
         </ShareSelectionProvider>
+        </ListingFiltersProvider>
       </NotificationsProvider>
     </AuthProvider>
   )

@@ -10,6 +10,34 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-07-31
+
+**Phase 3: Map View tab** — `/map`, one Mapbox satellite map with a pin per
+listing. Verified live with real keys: 8 listings → 1 canvas, 8 markers,
+satellite tiles loading.
+
+- **Filters are shared with the board**, not duplicated. Filter state moved
+  out of `ListingResults` into `ListingFiltersContext`, and the search/filter
+  UI into a reusable `ListingFilterBar`. Narrowing on the board and tapping
+  Map now shows exactly those pins — verified: "barbanda" on the board →
+  Map View opens with the search carried over and 1 pin of 8.
+- **Tapping a pin** opens a compact card (thumbnail, type, address, status,
+  area, rate, deal value) linking to the listing. Respects rate privacy.
+- The map **auto-centres on the listings shown**, so a filtered set fills the
+  view instead of sitting off-screen.
+- Own **private listings appear on the map** alongside public ones, so a
+  broker sees their full inventory geographically.
+- `mapbox-gl` stays a lazy chunk here too — one map instance per visit, and
+  panning/zooming inside it is free.
+
+Also fixed: **invite links pointed at localhost.** `redirectTo` used
+`window.location.origin`, so an invite sent while the admin was on localhost
+produced a dead link on the recipient's phone — blocking broker onboarding.
+Added `VITE_APP_URL` (via an `appUrl` helper) to pin invite redirects to the
+deployed site.
+
+---
+
 ## 2026-07-30
 
 **Phase 2: Leaflet → Mapbox, with Google for placing pins.**
