@@ -102,14 +102,16 @@ export const ruleBasedParser: ListingParser = {
     // ---- area + unit -------------------------------------------------------
     const areaRe = new RegExp(
       String.raw`(\d[\d,]*(?:\.\d+)?)\s*` +
-        String.raw`(sq\.?\s*ft|sqft|sq\.?\s*feet|square\s*feet|sq\.?\s*yd|gaj|gaz|` +
+        // "sq ft", "sq.ft", "sq/ft", "sq-ft", "sqft", "square feet" — brokers
+        // use every separator, so accept . / - or nothing between the parts.
+        String.raw`(sq\s*[./\-]?\s*ft|sq\s*[./\-]?\s*feet|square\s*feet|sq\s*[./\-]?\s*yd|gaj|gaz|` +
         String.raw`decimal|dismil|guntha|acres?|acers?|ekad|ekar|hectares?|ha)\b`,
       'i',
     )
     const areaM = t.match(areaRe)
     if (areaM) {
       const value = num(areaM[1])
-      const unitWord = areaM[2].toLowerCase().replace(/[.\s]/g, '')
+      const unitWord = areaM[2].toLowerCase().replace(/[./\-\s]/g, '')
       let unit: AreaUnit = 'sqft'
       let converted = value
       if (/^(acres?|acers?|ekad|ekar)$/.test(unitWord)) {
@@ -138,7 +140,7 @@ export const ruleBasedParser: ListingParser = {
     //   1. a cue word/symbol:  "rate 1850 per sqft", "@1850/sqft", "₹5000 sqft"
     //   2. a per/slash split:  "80 lakh per acre", "1850/sqft"
     //   3. the psf suffix:     "1200 psf"
-    const UNIT = String.raw`sq\.?\s*ft|sqft|sq\.?\s*feet|square\s*feet|acres?|acers?|gaj|gaz`
+    const UNIT = String.raw`sq\s*[./\-]?\s*ft|sq\s*[./\-]?\s*feet|square\s*feet|acres?|acers?|gaj|gaz`
     const MAG = String.raw`k|lac|lakh|lakhs|cr|crore|crores`
     const ratePatterns = [
       new RegExp(
@@ -182,7 +184,7 @@ export const ruleBasedParser: ListingParser = {
 
     if (rateM) {
       const value = applyMagnitude(num(rateM[1]), rateM[2])
-      const unitWord = rateM[3].toLowerCase().replace(/[.\s]/g, '')
+      const unitWord = rateM[3].toLowerCase().replace(/[./\-\s]/g, '')
       let rateUnit: RateUnit = 'sqft'
       let rate = value
       if (unitWord === 'psf') {
@@ -253,7 +255,18 @@ export const ruleBasedParser: ListingParser = {
       // not an address — taking it would overwrite a perfectly good locality
       // from the map pin with the sentence the broker just typed.
       const looksLikeSpec =
-        areaRe.test(first) || ratePatterns.some((re) => re.test(first)) || /@/.test(first)
+        areaRe.test(first) ||
+        ratePatterns.some((re) => re.test(first)) ||
+        /@/.test(first) ||
+        // e.g. "residential plot 5000<unrecognised unit>" — a STRONG type word
+        // next to a number is a description, not an address.
+        //
+        // Deliberately excludes the last, weak pattern (plot/land/zameen):
+        // "Plot 42, near water tank" is a perfectly good address, and treating
+        // it as a spec line would throw away the most useful thing the broker
+        // typed.
+        (/\d/.test(first) &&
+          TYPE_PATTERNS.slice(0, -1).some(([re]) => re.test(first)))
       // Also skip lines that are purely numeric/price noise.
       if (first && /[a-z]{3}/i.test(first) && !looksLikeSpec) {
         set('address_line1', first)

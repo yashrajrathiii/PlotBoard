@@ -34,7 +34,15 @@ session, with bullets for what shipped and *why* where it matters.
   the locality from the map pin. Lines containing an area, a rate or an `@` are
   now rejected as address candidates — while a genuine line like "Plot 42, near
   water tank" is still used and still wins over the pin.
-- Parser suite now 12/12.
+- **`sq/ft` and `sq-ft` now parse.** The area pattern accepted "sq ft",
+  "sq.ft" and "sqft" but not a slash or hyphen, so "5000sq/ft" produced no
+  area — and because the area went unrecognised, the line also failed the
+  spec-line test and leaked into the address field. One gap, two symptoms.
+- While fixing it, a too-broad heuristic briefly rejected "Plot 42, near water
+  tank" as a spec line. The type-word check now only fires on *strong* type
+  words (residential/commercial/agricultural/industrial), never on
+  "plot"/"land", which appear in genuine addresses.
+- Parser suite now 14/14.
 
 **Setup gap found while verifying:** reverse geocoding failed with
 `REQUEST_DENIED: The webpage is not allowed to use the geocoder` because the

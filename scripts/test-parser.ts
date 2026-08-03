@@ -81,6 +81,17 @@ price 45 lakh`,
 2400 sqft, @2500`,
     expect: { address_line1: 'Plot 42, near water tank', area: 2400, rate: 2500 },
   },
+  {
+    label: 'sq/ft with a slash separator',
+    text: `residential plot 5000sq/ft
+@3000`,
+    expect: { area: 5000, area_unit: 'sqft', rate: 3000, rate_unit: 'sqft', property_type: 'Residential Plot', address_line1: undefined },
+  },
+  {
+    label: 'other sqft spellings',
+    text: '1200 sq-ft plot @1500',
+    expect: { area: 1200, area_unit: 'sqft', rate: 1500 },
+  },
 ]
 
 let pass = 0
