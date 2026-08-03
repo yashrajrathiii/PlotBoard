@@ -131,6 +131,25 @@ export async function resolveMediaUrls(
   return urls
 }
 
+/**
+ * Ask the server to cache a satellite thumbnail for a listing (fetched from
+ * Mapbox once, stored in R2). Best-effort and deliberately silent: a listing
+ * must still save if this fails, and cards simply fall back to a placeholder.
+ * No-op until R2 is the active provider.
+ */
+export async function refreshStaticMap(
+  listingId: string,
+  lat: number,
+  lng: number,
+): Promise<void> {
+  if (activeProvider() !== 'r2') return
+  try {
+    await callMediaFn({ action: 'static-map', listingId, lat, lng })
+  } catch {
+    // Non-fatal by design — never block saving a listing on a thumbnail.
+  }
+}
+
 /** Delete files from whichever store holds them. Best-effort per provider. */
 export async function deleteMedia(items: StoredMedia[]): Promise<void> {
   if (items.length === 0) return

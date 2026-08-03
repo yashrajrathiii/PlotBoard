@@ -68,6 +68,10 @@ export interface Listing {
   created_by: string
   created_at: string
   updated_at: string
+  /** R2 path of the cached satellite thumbnail; null until generated. */
+  static_map_path: string | null
+  /** Signed URL for `static_map_path`, resolved client-side alongside media. */
+  static_map_url?: string
   poster: { name: string; phone: string } | null
   listing_media: ListingMedia[]
 }

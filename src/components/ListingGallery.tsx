@@ -1,5 +1,4 @@
-import { useRef, useState } from 'react'
-import { MapContainer, Marker, TileLayer } from 'react-leaflet'
+import { lazy, Suspense, useRef, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,9 +6,13 @@ import {
   Map as MapIcon,
   Play,
 } from 'lucide-react'
-import '../lib/leafletSetup'
-import { OSM_ATTRIBUTION, OSM_TILE_URL } from '../lib/leafletSetup'
+import { PIN_ZOOM } from '../lib/maps/config'
 import type { Listing } from '../lib/types'
+
+// mapbox-gl is ~500 KB gzipped. Loading it lazily means opening a listing
+// costs nothing extra unless the viewer actually swipes to the map slide —
+// which also keeps the Mapbox map-load meter down.
+const SatelliteMap = lazy(() => import('../lib/maps/SatelliteMap'))
 
 interface Slide {
   key: string
@@ -54,15 +57,29 @@ export default function ListingGallery({ listing }: { listing: Listing }) {
         }}
       >
         {current.type === 'map' ? (
-          <MapContainer
-            center={[listing.latitude, listing.longitude]}
-            zoom={15}
-            className="h-full w-full"
-            scrollWheelZoom
+          // Only rendered while this slide is showing, so a listing view costs
+          // a Mapbox map load only if the viewer actually opens the map.
+          <Suspense
+            fallback={
+              <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-400">
+                <MapIcon size={28} />
+              </div>
+            }
           >
-            <TileLayer url={OSM_TILE_URL} attribution={OSM_ATTRIBUTION} />
-            <Marker position={[listing.latitude, listing.longitude]} />
-          </MapContainer>
+            <SatelliteMap
+              center={{ lat: listing.latitude, lng: listing.longitude }}
+              zoom={PIN_ZOOM}
+              showControls
+              markers={[
+                {
+                  id: listing.id,
+                  latitude: listing.latitude,
+                  longitude: listing.longitude,
+                  active: true,
+                },
+              ]}
+            />
+          </Suspense>
         ) : current.type === 'video' ? (
           current.url ? (
             <video

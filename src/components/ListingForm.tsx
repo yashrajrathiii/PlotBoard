@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Film, Globe, ImagePlus, Lock, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import LocationPicker from './LocationPicker'
+import PinPicker from '../lib/maps/PinPicker'
 import {
   LISTING_STATUSES,
   PROPERTY_TYPES,
@@ -17,7 +17,7 @@ import {
 } from '../lib/types'
 import type { LatLng } from '../lib/geo'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
-import { deleteMedia, uploadMedia } from '../lib/mediaStorage'
+import { deleteMedia, refreshStaticMap, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
 import BackButton from './BackButton'
 import ConfirmDialog from './ConfirmDialog'
@@ -239,6 +239,10 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
 
     // Upload new media after the listing row exists; failures downgrade to a
     // warning so the listing itself is never lost.
+    // Cache the card thumbnail for the (possibly new) coordinates. Fire and
+    // forget — it must never block or fail the save.
+    void refreshStaticMap(listingId, coords.lat, coords.lng)
+
     const uploadErrors: string[] = []
     const startPos = existingPhotos.length
     const uploads: { file: File; media_type: 'photo' | 'video'; position: number }[] =
@@ -534,7 +538,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
         {/* ---------- Location ---------- */}
         <div className="space-y-2 border-t border-gray-100 pt-4">
           <h2 className="text-sm font-semibold text-gray-900">Location pin</h2>
-          <LocationPicker value={coords} onChange={setCoords} />
+          <PinPicker value={coords} onChange={setCoords} />
         </div>
 
         {/* ---------- Notes ---------- */}

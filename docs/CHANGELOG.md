@@ -10,6 +10,35 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-07-30
+
+**Phase 2: Leaflet → Mapbox, with Google for placing pins.**
+
+- **`src/lib/maps/`** is the only place that knows a map vendor:
+  `SatelliteMap` (Mapbox display), `PinPicker` (Google + Places), `config`,
+  and a `MapPlaceholder` for when a key is missing.
+- **Listing cards no longer mount a live map.** Each card used to create its
+  own Leaflet instance — free on OSM, but ~$500/month on a metered provider at
+  20 brokers' usage (a 15-card board = 15 billable loads *per view*). Cards now
+  show photos, falling back to a cached satellite thumbnail. **Verified: a
+  15-card board triggers zero map instantiations and zero tile requests.**
+- **Migration 011** — `listings.static_map_path`, plus a `static-map` action on
+  the `media` function that fetches one Mapbox static image per listing and
+  stores it in R2, so cards are served from R2's free egress forever.
+- **The detail map is lazy** in both senses: the slide only renders when
+  opened, and `mapbox-gl` (~500 KB gzipped) is now a `React.lazy` chunk rather
+  than part of the main bundle. Main CSS dropped 72 KB → 31 KB.
+- **Google is used only to place a pin**, for its stronger Indian address
+  search. Kept the free `parseCoords` shortcut for pasted coordinates/URLs and
+  the `withinIndia` guard; replaced Nominatim with Places Autocomplete.
+  Fixed the old `FlyTo` bug that re-ran `flyTo` on every render.
+- **Leaflet fully removed** — `leaflet`, `react-leaflet`, `@types/leaflet`,
+  `leafletSetup.ts`, `LocationPicker.tsx`, and the global CSS import.
+- **Degrades gracefully without keys**: maps render a labelled placeholder,
+  the app works, console is clean. Setup guide in `docs/MAPS.md`.
+
+---
+
 ## 2026-07-29
 
 **Phase 1 of the maps/capture round: invite fixes + `front` + per-acre rates.**

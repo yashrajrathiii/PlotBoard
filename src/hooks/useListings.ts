@@ -31,11 +31,18 @@ export function useListings() {
       row.listing_media.sort((a, b) => a.position - b.position)
     }
 
-    // One batch per storage provider for the whole board.
+    // One batch per storage provider for the whole board — listing media plus
+    // the cached satellite thumbnails, resolved together in the same round trip.
     const allMedia = rows.flatMap((l) => l.listing_media)
-    const urlByPath = await resolveMediaUrls(allMedia)
+    const thumbs = rows
+      .filter((l) => l.static_map_path)
+      .map((l) => ({ storage_path: l.static_map_path!, storage_provider: 'r2' as const }))
+    const urlByPath = await resolveMediaUrls([...allMedia, ...thumbs])
     for (const m of allMedia) {
       m.url = urlByPath.get(m.storage_path)
+    }
+    for (const l of rows) {
+      if (l.static_map_path) l.static_map_url = urlByPath.get(l.static_map_path)
     }
 
     setListings(rows)

@@ -154,6 +154,13 @@ export default function ListingCard({
               className="w-16 h-16 rounded-lg object-cover shrink-0"
               loading="lazy"
             />
+          ) : listing.static_map_url ? (
+            <img
+              src={listing.static_map_url}
+              alt={`Map of ${listing.address_line1}`}
+              className="w-16 h-16 rounded-lg object-cover shrink-0"
+              loading="lazy"
+            />
           ) : (
             <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
               <MapPin size={22} className="text-gray-300" />
@@ -232,9 +239,8 @@ export default function ListingCard({
         <div className="rounded-t-2xl overflow-hidden" onClick={stop}>
           <MediaCarousel
             photos={photos}
-            latitude={listing.latitude}
-            longitude={listing.longitude}
             label={listing.address_line1}
+            staticMapUrl={listing.static_map_url}
           />
         </div>
 

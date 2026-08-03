@@ -174,6 +174,73 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, urls });
     }
 
+    // ---------- cache a satellite thumbnail for a listing ----------
+    // Fetched ONCE per listing and stored in R2, so listing cards render a
+    // picture from R2's free egress instead of mounting a billable live map.
+    if (action === "static-map") {
+      const { listingId, lat, lng } = body;
+      if (!UUID_RE.test(listingId ?? "")) {
+        return json({ error: "A valid listingId is required" }, 400);
+      }
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        return json({ error: "lat and lng are required" }, 400);
+      }
+      const mapboxToken = Deno.env.get("MAPBOX_TOKEN");
+      if (!mapboxToken) {
+        // Not configured yet — cards fall back to a placeholder. Not an error.
+        return json({ ok: true, skipped: "MAPBOX_TOKEN not set" });
+      }
+      // Ownership: you may only generate a thumbnail for your own listing.
+      const { data: listing } = await userClient
+        .from("listings")
+        .select("id")
+        .eq("id", listingId)
+        .eq("created_by", userId)
+        .maybeSingle();
+      if (!listing) return json({ error: "Not your listing" }, 403);
+
+      const styleUrl =
+        "https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static";
+      const marker = `pin-s+e11d48(${lng},${lat})`;
+      const src =
+        `${styleUrl}/${marker}/${lng},${lat},15,0/600x400@2x` +
+        `?access_token=${mapboxToken}&logo=false&attribution=false`;
+
+      const res = await fetch(src);
+      if (!res.ok) {
+        return json({ error: `Mapbox static image failed (HTTP ${res.status})` }, 502);
+      }
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const path = `${listingId}/map-${crypto.randomUUID()}.png`;
+      const put = await r2.fetch(objectUrl(path), {
+        method: "PUT",
+        body: bytes,
+        headers: { "Content-Type": "image/png" },
+      });
+      if (!put.ok) {
+        return json({ error: `Could not store thumbnail (HTTP ${put.status})` }, 502);
+      }
+
+      // Replace any previous thumbnail (coordinates may have been edited).
+      // userClient, not service-role: the listings UPDATE policy is owner-only,
+      // so RLS already guarantees a member can only touch their own row.
+      const { data: prev } = await userClient
+        .from("listings")
+        .select("static_map_path")
+        .eq("id", listingId)
+        .maybeSingle();
+      const { error: updateError } = await userClient
+        .from("listings")
+        .update({ static_map_path: path })
+        .eq("id", listingId);
+      if (updateError) return json({ error: updateError.message }, 500);
+      if (prev?.static_map_path && prev.static_map_path !== path) {
+        await r2.fetch(objectUrl(prev.static_map_path), { method: "DELETE" });
+      }
+
+      return json({ ok: true, path });
+    }
+
     // ---------- delete objects the caller owns ----------
     if (action === "delete") {
       const paths: string[] = Array.isArray(body.paths) ? body.paths : [];

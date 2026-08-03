@@ -43,7 +43,7 @@ owner/broker split. Invite-only, mobile-first, installable as a PWA.
 | ---------- | ----------------------------------------------------------------- |
 | Frontend   | React 19 · Vite · TypeScript                                      |
 | Styling    | Tailwind CSS 4                                                    |
-| Maps       | Leaflet + OpenStreetMap (no API key)                             |
+| Maps       | Mapbox (satellite display) + Google Maps (pin placing)           |
 | Backend    | Supabase — Postgres, Auth, Row Level Security, Realtime          |
 | Media      | Cloudflare R2 (10 GB free, unlimited free egress)                |
 | Serverless | Supabase Edge Functions (`invite-user`, `media`)                 |
@@ -120,6 +120,8 @@ plotboard/
   policies, triggers, the notification model, and the Edge Functions.
 - **[docs/STORAGE.md](docs/STORAGE.md)** — Cloudflare R2 setup, the cost model,
   and how legacy Supabase files keep working alongside R2.
+- **[docs/MAPS.md](docs/MAPS.md)** — Mapbox + Google Maps setup, key
+  restrictions, and why listing cards never mount a live map.
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Supabase + Vercel setup,
   environment variables, and post-deploy configuration.
 - **[docs/CHANGELOG.md](docs/CHANGELOG.md)** — the full development history:

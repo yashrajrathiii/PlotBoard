@@ -33,10 +33,14 @@ export function useListing(id: string | undefined) {
     const row = data as unknown as Listing | null
     if (row) {
       row.listing_media.sort((a, b) => a.position - b.position)
-      const urlByPath = await resolveMediaUrls(row.listing_media)
+      const thumb = row.static_map_path
+        ? [{ storage_path: row.static_map_path, storage_provider: 'r2' as const }]
+        : []
+      const urlByPath = await resolveMediaUrls([...row.listing_media, ...thumb])
       for (const m of row.listing_media) {
         m.url = urlByPath.get(m.storage_path)
       }
+      if (row.static_map_path) row.static_map_url = urlByPath.get(row.static_map_path)
     }
 
     setListing(row)
