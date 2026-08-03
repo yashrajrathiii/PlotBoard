@@ -249,8 +249,15 @@ export const ruleBasedParser: ListingParser = {
       .filter(Boolean)
     if (lines.length > 0) {
       const first = lines[0].replace(/^[*#•\-\s]+/, '').slice(0, 120)
-      // Don't use a line that is purely numeric/price noise as an address.
-      if (first && /[a-z]{3}/i.test(first)) set('address_line1', first)
+      // A "spec" line ("2400sq.feet residential plot, @2500") is a description,
+      // not an address — taking it would overwrite a perfectly good locality
+      // from the map pin with the sentence the broker just typed.
+      const looksLikeSpec =
+        areaRe.test(first) || ratePatterns.some((re) => re.test(first)) || /@/.test(first)
+      // Also skip lines that are purely numeric/price noise.
+      if (first && /[a-z]{3}/i.test(first) && !looksLikeSpec) {
+        set('address_line1', first)
+      }
     }
 
     const cityM = t.match(

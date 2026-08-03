@@ -29,7 +29,12 @@ session, with bullets for what shipped and *why* where it matters.
   and treating that as a rate would be wildly wrong — there is a regression
   test pinning exactly that.
 - Common misspellings accepted: **acer / acers / ekad / ekar** for acre.
-- Parser suite now 10/10.
+- **A spec line is no longer mistaken for an address.** "2400sq.feet
+  residential plot, @2500" was being taken as `address_line1`, which then beat
+  the locality from the map pin. Lines containing an area, a rate or an `@` are
+  now rejected as address candidates — while a genuine line like "Plot 42, near
+  water tank" is still used and still wins over the pin.
+- Parser suite now 12/12.
 
 **Setup gap found while verifying:** reverse geocoding failed with
 `REQUEST_DENIED: The webpage is not allowed to use the geocoder` because the

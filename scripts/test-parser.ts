@@ -70,6 +70,17 @@ rate 3,200 per sqft`,
 price 45 lakh`,
     expect: { area: 2400, rate: undefined },
   },
+  {
+    label: 'a spec-only line must NOT become the address',
+    text: '2400sq.feet residential plot, @2500',
+    expect: { area: 2400, rate: 2500, address_line1: undefined },
+  },
+  {
+    label: 'a real address line is still used',
+    text: `Plot 42, near water tank
+2400 sqft, @2500`,
+    expect: { address_line1: 'Plot 42, near water tank', area: 2400, rate: 2500 },
+  },
 ]
 
 let pass = 0
