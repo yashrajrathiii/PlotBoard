@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { AlertTriangle, Check, Copy, Link2, Send, Trash2, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { copyText, whatsappShareUrl } from '../lib/share'
+import { appUrl } from '../lib/appUrl'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 interface Member {
@@ -114,7 +115,7 @@ export default function InvitePage() {
       const data = await callFn({
         action: 'invite',
         email: email.trim(),
-        redirectTo: `${window.location.origin}/welcome`,
+        redirectTo: appUrl('/welcome'),
       })
       if (data.link) {
         // Already invited: the function returned a fresh shareable link rather
@@ -145,7 +146,7 @@ export default function InvitePage() {
       const data = await callFn({
         action: 'link',
         email: email.trim(),
-        redirectTo: `${window.location.origin}/welcome`,
+        redirectTo: appUrl('/welcome'),
       })
       if (data.link) setInviteLink({ email: data.user.email, url: data.link })
       void loadMembers()
