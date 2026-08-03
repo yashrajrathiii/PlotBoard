@@ -10,6 +10,36 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-02
+
+**Locality from the map pin, and `@` rate semantics.**
+
+- **Pin → locality.** Dropping a pin now looks up the *colony* name —
+  "Gudhiyari", "Shankar Nagar" — via Google reverse geocoding and pre-fills
+  address, city, state and pincode. It deliberately returns the sublocality
+  rather than a full postal address, because that is how brokers actually
+  describe a plot. Typed text always wins over the lookup: "Plot 42, near water
+  tank" is more useful than "Gudhiyari", so the pin only fills what is empty.
+  Falls back to the smallest administrative area for rural land with no colony.
+- **`@` now infers the rate unit from the area.** "2400 sq.feet plot, @2500"
+  means ₹2,500/**sqft**; "5 acer agriculture plot, @3000000" means
+  ₹30,00,000/**acre**. The unit is inherited from whatever the plot is measured
+  in, which is how brokers write it.
+  Deliberately limited to `@`: "price 45 lakh" almost always means the TOTAL,
+  and treating that as a rate would be wildly wrong — there is a regression
+  test pinning exactly that.
+- Common misspellings accepted: **acer / acers / ekad / ekar** for acre.
+- Parser suite now 10/10.
+
+**Setup gap found while verifying:** reverse geocoding failed with
+`REQUEST_DENIED: The webpage is not allowed to use the geocoder` because the
+setup guide only enabled Maps JavaScript + Places. The **Geocoding API** is a
+third, separate API that must be enabled and added to the key restrictions.
+`docs/MAPS.md` now says so, and the code logs a one-off actionable warning
+instead of failing silently.
+
+---
+
 ## 2026-08-01
 
 **Phase 4: add from the map, and import from WhatsApp.** Both funnel through

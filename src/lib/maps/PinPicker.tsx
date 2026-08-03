@@ -11,6 +11,7 @@ import { Crosshair, Search } from 'lucide-react'
 import { GOOGLE_MAPS_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, PIN_ZOOM, hasGoogleMaps } from './config'
 import MapPlaceholder from './MapPlaceholder'
 import { parseCoords, withinIndia, type LatLng } from '../geo'
+import { reverseGeocode, type PlaceAddress } from './reverseGeocode'
 
 /**
  * Google satellite map used *only* to place a pin.
@@ -27,10 +28,13 @@ import { parseCoords, withinIndia, type LatLng } from '../geo'
 export default function PinPicker({
   value,
   onChange,
+  onAddress,
   className = 'h-64',
 }: {
   value: LatLng | null
   onChange: (p: LatLng) => void
+  /** Fired with the looked-up address whenever the pin moves. */
+  onAddress?: (a: PlaceAddress) => void
   className?: string
 }) {
   if (!hasGoogleMaps()) {
@@ -44,7 +48,7 @@ export default function PinPicker({
   }
   return (
     <APIProvider apiKey={GOOGLE_MAPS_KEY!}>
-      <PickerInner value={value} onChange={onChange} className={className} />
+      <PickerInner value={value} onChange={onChange} onAddress={onAddress} className={className} />
     </APIProvider>
   )
 }
@@ -52,13 +56,16 @@ export default function PinPicker({
 function PickerInner({
   value,
   onChange,
+  onAddress,
   className,
 }: {
   value: LatLng | null
   onChange: (p: LatLng) => void
+  onAddress?: (a: PlaceAddress) => void
   className: string
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [place, setPlace] = useState<PlaceAddress | null>(null)
 
   const pick = useCallback(
     (p: LatLng) => {
@@ -68,8 +75,15 @@ function PickerInner({
       }
       setError(null)
       onChange(p)
+      // Look up the colony name for the new pin. Best-effort: if it fails the
+      // broker just types the address themselves.
+      void reverseGeocode(p).then((a) => {
+        if (!a) return
+        setPlace(a)
+        onAddress?.(a)
+      })
     },
-    [onChange],
+    [onChange, onAddress],
   )
 
   return (
@@ -114,6 +128,12 @@ function PickerInner({
           ? `Pin: ${value.lat.toFixed(5)}, ${value.lng.toFixed(5)} — tap the map or drag the pin to adjust.`
           : 'Search above, or tap the map to drop the pin on the plot.'}
       </p>
+      {place?.locality && (
+        <p className="text-xs text-emerald-700">
+          Detected: <span className="font-medium">{place.locality}</span>
+          {place.city ? `, ${place.city}` : ''}
+        </p>
+      )}
     </div>
   )
 }

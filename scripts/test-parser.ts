@@ -53,6 +53,23 @@ rate 5000/sqft`,
 rate 3,200 per sqft`,
     expect: { area: 4800, rate: 3200, property_type: 'Industrial' },
   },
+  {
+    label: '@ infers sqft from a sqft plot',
+    text: '2400sq.feet residential plot, @2500',
+    expect: { area: 2400, area_unit: 'sqft', rate: 2500, rate_unit: 'sqft', property_type: 'Residential Plot' },
+  },
+  {
+    label: '@ infers acre from an acre plot (and "acer" spelling)',
+    text: '5 acer agriculture plot, @3000000',
+    expect: { area: 5, area_unit: 'acre', rate: 3000000, rate_unit: 'acre', property_type: 'Agricultural' },
+  },
+  {
+    label: '"price 45 lakh" is a TOTAL, must not become a rate',
+    text: `Shankar Nagar
+2400 sqft plot
+price 45 lakh`,
+    expect: { area: 2400, rate: undefined },
+  },
 ]
 
 let pass = 0

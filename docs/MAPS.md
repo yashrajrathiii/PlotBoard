@@ -11,6 +11,7 @@ document covers why, what it costs, and how to set up the keys.
 | Map View tab | **Mapbox** Satellite Streets | Cheap, 50k free loads, unlimited panning |
 | Listing detail map | **Mapbox**, lazy-loaded | Only loads if the viewer opens the map slide |
 | Placing a pin | **Google Maps + Places** | Its Indian address/POI search is materially better |
+| Pin → locality name | **Google Geocoding** | Returns the colony ("Gudhiyari"), which is how brokers describe a plot |
 
 **Coordinates are provider-neutral.** Both use WGS84, so a pin placed in
 Google renders on the identical spot in Mapbox — no conversion, no syncing,
@@ -35,6 +36,7 @@ All figures are for **all 20 users combined**.
 | Mapbox map loads | ~14,000/mo | 50,000/mo | $5 / 1,000 |
 | Mapbox static images | ~100/mo (one per listing) | 50,000/mo | $1 / 1,000 |
 | Google map loads | ~200/mo | 10,000/mo | $7 / 1,000 |
+| Google geocoding (pin → locality) | ~200/mo | 10,000/mo | $5 / 1,000 |
 
 **Expected bill: ₹0/month**, with ~3.6× headroom on Mapbox and ~50× on Google.
 
@@ -68,15 +70,19 @@ you're trending past ~35,000/month, apply it.**
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/) → create a
    project (e.g. `plotboard`).
-2. **APIs & Services → Library** → enable exactly two:
-   - **Maps JavaScript API**
-   - **Places API**
+2. **APIs & Services → Library** → enable these three:
+   - **Maps JavaScript API** — the map itself
+   - **Places API** — address search when finding a plot
+   - **Geocoding API** — turns the dropped pin into a locality name
+     ("Gudhiyari", "Shankar Nagar"). Without it the pin still works but the
+     address fields stay blank, and the browser console shows
+     `REQUEST_DENIED: The webpage is not allowed to use the geocoder`.
 3. **APIs & Services → Credentials** → *Create credentials → API key*.
 4. **Restrict the key** — this is mandatory, not optional. An unrestricted key
    that leaks can be used by anyone at your expense:
    - *Application restrictions* → **HTTP referrers**, add
      `http://localhost:5173/*` and `https://YOUR-APP.vercel.app/*`
-   - *API restrictions* → **Restrict key** → select only the two APIs above
+   - *API restrictions* → **Restrict key** → select only the three APIs above
 5. **Billing** must be enabled on the project even to use the free tier. Set a
    budget alert: **Billing → Budgets & alerts** → e.g. alert at $5.
 6. Add to `.env.local` and Vercel:

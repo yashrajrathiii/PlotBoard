@@ -103,7 +103,7 @@ export const ruleBasedParser: ListingParser = {
     const areaRe = new RegExp(
       String.raw`(\d[\d,]*(?:\.\d+)?)\s*` +
         String.raw`(sq\.?\s*ft|sqft|sq\.?\s*feet|square\s*feet|sq\.?\s*yd|gaj|gaz|` +
-        String.raw`decimal|dismil|guntha|acres?|hectares?|ha)\b`,
+        String.raw`decimal|dismil|guntha|acres?|acers?|ekad|ekar|hectares?|ha)\b`,
       'i',
     )
     const areaM = t.match(areaRe)
@@ -112,7 +112,7 @@ export const ruleBasedParser: ListingParser = {
       const unitWord = areaM[2].toLowerCase().replace(/[.\s]/g, '')
       let unit: AreaUnit = 'sqft'
       let converted = value
-      if (/^acres?$/.test(unitWord)) {
+      if (/^(acres?|acers?|ekad|ekar)$/.test(unitWord)) {
         unit = 'acre'
       } else if (/^(hectares?|ha)$/.test(unitWord)) {
         // No hectare unit in the schema — express it in acres.
@@ -138,7 +138,7 @@ export const ruleBasedParser: ListingParser = {
     //   1. a cue word/symbol:  "rate 1850 per sqft", "@1850/sqft", "₹5000 sqft"
     //   2. a per/slash split:  "80 lakh per acre", "1850/sqft"
     //   3. the psf suffix:     "1200 psf"
-    const UNIT = String.raw`sq\.?\s*ft|sqft|sq\.?\s*feet|square\s*feet|acre|gaj|gaz`
+    const UNIT = String.raw`sq\.?\s*ft|sqft|sq\.?\s*feet|square\s*feet|acres?|acers?|gaj|gaz`
     const MAG = String.raw`k|lac|lakh|lakhs|cr|crore|crores`
     const ratePatterns = [
       new RegExp(
@@ -156,6 +156,30 @@ export const ruleBasedParser: ListingParser = {
       rateM = t.match(re)
       if (rateM) break
     }
+
+    // 4. Bare "@2500" with no unit. Brokers write the rate in whatever unit
+    //    the plot is measured in — "@2500" on a sqft plot means ₹2,500/sqft,
+    //    "@3000000" on an acre plot means ₹30,00,000/acre — so inherit the
+    //    area's unit.
+    //
+    //    Deliberately limited to "@": "price 45 lakh" almost always means the
+    //    TOTAL, and treating that as a rate would be wildly wrong. "@" is the
+    //    one symbol brokers use unambiguously for a rate.
+    let inferredRateUnit: RateUnit | null = null
+    if (!rateM) {
+      const bare = t.match(
+        new RegExp(String.raw`@\s*[:-]?\s*₹?\s*(\d[\d,]*(?:\.\d+)?)\s*(${MAG})?`, 'i'),
+      )
+      if (bare) {
+        inferredRateUnit = fields.area_unit ?? 'sqft'
+        const value = applyMagnitude(num(bare[1]), bare[2])
+        if (Number.isFinite(value) && value > 0) {
+          set('rate', Math.round(value * 100) / 100)
+          set('rate_unit', inferredRateUnit)
+        }
+      }
+    }
+
     if (rateM) {
       const value = applyMagnitude(num(rateM[1]), rateM[2])
       const unitWord = rateM[3].toLowerCase().replace(/[.\s]/g, '')
@@ -163,7 +187,7 @@ export const ruleBasedParser: ListingParser = {
       let rate = value
       if (unitWord === 'psf') {
         rateUnit = 'sqft'
-      } else if (unitWord === 'acre') {
+      } else if (/^(acres?|acers?)$/.test(unitWord)) {
         rateUnit = 'acre'
       } else if (/^(gaj|gaz)$/.test(unitWord)) {
         // Quoted per gaj — convert to per sqft so the schema stays consistent.

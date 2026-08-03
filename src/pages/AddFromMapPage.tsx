@@ -4,6 +4,7 @@ import PinPicker from '../lib/maps/PinPicker'
 import ListingForm from '../components/ListingForm'
 import BackButton from '../components/BackButton'
 import type { LatLng } from '../lib/geo'
+import type { PlaceAddress } from '../lib/maps/reverseGeocode'
 import {
   ruleBasedParser,
   type ListingDraft,
@@ -21,6 +22,7 @@ import {
  */
 export default function AddFromMapPage() {
   const [coords, setCoords] = useState<LatLng | null>(null)
+  const [place, setPlace] = useState<PlaceAddress | null>(null)
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<ParsedListing | null>(null)
   const [busy, setBusy] = useState(false)
@@ -34,6 +36,28 @@ export default function AddFromMapPage() {
     // The dropped pin always wins over anything in the text.
     result.fields.latitude = coords.lat
     result.fields.longitude = coords.lng
+
+    // Fill the address from the pin's location, but never overwrite something
+    // the broker actually wrote — typed text is more specific than a colony
+    // name ("Plot 42, near water tank" beats "Gudhiyari").
+    if (place) {
+      if (place.locality && !result.fields.address_line1) {
+        result.fields.address_line1 = place.locality
+        result.autofilled.add('address_line1')
+      }
+      if (place.city && !result.fields.city) {
+        result.fields.city = place.city
+        result.autofilled.add('city')
+      }
+      if (place.state && !result.fields.state) {
+        result.fields.state = place.state
+        result.autofilled.add('state')
+      }
+      if (place.pincode && !result.fields.pincode) {
+        result.fields.pincode = place.pincode
+        result.autofilled.add('pincode')
+      }
+    }
     setParsed(result)
     setBusy(false)
   }
@@ -62,7 +86,12 @@ export default function AddFromMapPage() {
           <p className="text-xs text-gray-500 mb-2">
             Search an address, or tap the satellite map where the property is.
           </p>
-          <PinPicker value={coords} onChange={setCoords} className="h-72" />
+          <PinPicker
+            value={coords}
+            onChange={setCoords}
+            onAddress={setPlace}
+            className="h-72"
+          />
         </div>
 
         <div className="border-t border-gray-100 pt-4">
