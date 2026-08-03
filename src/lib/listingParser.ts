@@ -315,8 +315,22 @@ const SINGLE_FIELDS: (keyof ListingDraft)[] = [
   'property_type',
   'contact_type',
   'status',
-  'notes',
 ]
+
+/**
+ * Fields the overlay owns outright, where an absent value means "deliberately
+ * empty" rather than "couldn't tell".
+ *
+ * Only `notes` qualifies, and for a specific reason: notes is *derived from
+ * whatever is left over* after everything else is extracted. So if the overlay
+ * captured a line as structured data, the base's leftover copy of that same
+ * line is stale by definition — keeping it puts "@3000" in the notes of a
+ * listing whose rate field already says 3000.
+ *
+ * Every other field means the same thing when absent from either engine
+ * ("didn't find one"), so they keep the normal gap-filling behaviour.
+ */
+const OVERLAY_OWNS: (keyof ListingDraft)[] = ['notes']
 
 /**
  * Layers a second parse (in practice the AI's) over a first (the rules'):
@@ -349,6 +363,13 @@ export function mergeParsed(
   }
   for (const key of SINGLE_FIELDS) {
     if (has(key)) take(key)
+  }
+  for (const key of OVERLAY_OWNS) {
+    if (has(key)) take(key)
+    else {
+      delete fields[key]
+      autofilled.delete(key)
+    }
   }
 
   return { fields, autofilled, unmatched: base.unmatched, engine: 'ai' }

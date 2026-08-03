@@ -159,6 +159,20 @@ const mergeCases: {
     overlay: { address_line1: '', city: 'Bhilai' },
     expect: { address_line1: 'Plot 42, near water tank', city: 'Bhilai' },
   },
+  {
+    // The rules keep "@3000" as a leftover line; once the AI has captured it
+    // as rate=3000 there is nothing left over, so the stale note must go.
+    label: 'merge: notes are cleared when the overlay found nothing left over',
+    base: { rate: 3000, rate_unit: 'sqft', notes: '@3000' },
+    overlay: { rate: 3000, rate_unit: 'sqft' },
+    expect: { rate: 3000, notes: undefined },
+  },
+  {
+    label: 'merge: notes the overlay did supply still win',
+    base: { notes: '@3000' },
+    overlay: { notes: 'corner plot, boundary wall' },
+    expect: { notes: 'corner plot, boundary wall' },
+  },
 ]
 
 for (const c of mergeCases) {

@@ -56,7 +56,27 @@ session, with bullets for what shipped and *why* where it matters.
   only output channel is the fixed schema, and every field is re-validated
   server-side against the allowed enums and numeric ranges before it reaches
   the form.
+- **Stale notes are now cleared.** The rules keep leftover lines as notes, so
+  "@3000" survived into the notes of a listing whose rate field already said
+  3000 — the AI had correctly captured it, but "rules fill the gaps" preserved
+  the base's copy. `notes` is now owned by the AI outright when it runs: notes
+  is *derived from what's left over*, so once the AI has extracted a line, the
+  rules' copy of it is stale by definition. Every other field keeps normal
+  gap-filling, because there "absent" means the same thing from both engines.
 - New [`docs/PARSER.md`](PARSER.md) covers all of the above, plus setup.
+
+**Verified against the live key** — `gemini-3.5-flash-lite` confirmed reachable,
+~1.8s per parse:
+
+| Input | Result |
+| --- | --- |
+| `residential plot 5000sq/ft` + `@3000` | 5000 sqft, ₹3000/sqft, notes empty |
+| `2400 sqft plot` + `price 45 lakh` | area 2400; rate **not** set, total kept in notes |
+| `5 acer agriculture plot, @3000000` | 5 acre, ₹30,00,000/acre |
+| `200 gaj ka makan … rate 1800 per gaj` | 1800 sqft, ₹200/sqft (÷9), owner direct, 25 ft front |
+| `3 hectare … 1.2 cr per acre … pin 492002` | 7.41 acre, ₹1,20,00,000/acre, pincode |
+| Prompt-injection attempt | Ignored entirely; only real property data extracted |
+| `bhai kal milte hain chai peene` | Empty — nothing hallucinated |
 
 ## 2026-08-02
 

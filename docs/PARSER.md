@@ -63,6 +63,14 @@ the rest:
 
 This is why the merge is not an object spread, and there are tests pinning it.
 
+One field breaks the gap-filling rule: **`notes` is owned by the AI outright**
+when it runs. Notes is derived from whatever is *left over* after everything
+else is extracted, so once the AI has captured a line as structured data, the
+rules' leftover copy of that same line is stale by definition — otherwise
+"@3000" ends up in the notes of a listing whose rate field already says 3000.
+Every other field means the same thing when absent from either engine
+("didn't find one"), so they keep gap-filling.
+
 ---
 
 ## Model choice
