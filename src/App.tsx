@@ -15,6 +15,8 @@ import EditListingPage from './pages/EditListingPage'
 import ListingDetailPage from './pages/ListingDetailPage'
 import MyListingsPage from './pages/MyListingsPage'
 import MapViewPage from './pages/MapViewPage'
+import AddFromMapPage from './pages/AddFromMapPage'
+import ImportListingPage from './pages/ImportListingPage'
 import InvitePage from './pages/InvitePage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -80,6 +82,26 @@ export default function App() {
             <Protected>
               <Layout>
                 <MapViewPage />
+              </Layout>
+            </Protected>
+          }
+        />
+        <Route
+          path="/map/add"
+          element={
+            <Protected>
+              <Layout>
+                <AddFromMapPage />
+              </Layout>
+            </Protected>
+          }
+        />
+        <Route
+          path="/import"
+          element={
+            <Protected>
+              <Layout>
+                <ImportListingPage />
               </Layout>
             </Protected>
           }

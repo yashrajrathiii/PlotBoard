@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Inbox, Plus, Share2 } from 'lucide-react'
+import { ClipboardPaste, Inbox, Plus, Share2 } from 'lucide-react'
 import { useListings } from '../hooks/useListings'
 import { useShareSelection } from '../context/ShareSelectionContext'
 import ListingResults from '../components/ListingResults'
@@ -36,6 +36,13 @@ export default function BoardPage() {
               <Share2 size={16} /> <span className="hidden sm:inline">Share</span>
             </button>
           )}
+          <Link
+            to="/import"
+            title="Paste a WhatsApp message to pre-fill a listing"
+            className="hidden sm:flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg px-3 py-2"
+          >
+            <ClipboardPaste size={16} /> Import
+          </Link>
           {/* Desktop add button; mobile uses the floating button below */}
           <Link
             to="/add"

@@ -70,10 +70,10 @@ export default function MapViewPage() {
           )}
         </h1>
         <Link
-          to="/add"
+          to="/map/add"
           className="hidden sm:flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg px-3.5 py-2"
         >
-          <Plus size={16} /> Add listing
+          <Plus size={16} /> Add property here
         </Link>
       </div>
 
@@ -122,8 +122,8 @@ export default function MapViewPage() {
       </div>
 
       <Link
-        to="/add"
-        aria-label="Add listing"
+        to="/map/add"
+        aria-label="Add property from map"
         className="sm:hidden fixed bottom-20 right-4 z-30 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-4 shadow-lg"
       >
         <Plus size={24} />

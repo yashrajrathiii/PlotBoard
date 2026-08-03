@@ -16,6 +16,7 @@ import {
   type Visibility,
 } from '../lib/types'
 import type { LatLng } from '../lib/geo'
+import type { ListingDraft } from '../lib/listingParser'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
 import { deleteMedia, refreshStaticMap, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
@@ -40,7 +41,7 @@ function Field({
   optional,
   children,
 }: {
-  label: string
+  label: ReactNode
   optional?: boolean
   children: ReactNode
 }) {
@@ -60,37 +61,59 @@ function Field({
  * field, allows changing status, and manages already-uploaded media
  * (removal is immediate: storage file + DB row go together).
  */
-export default function ListingForm({ existing }: { existing?: Listing }) {
+export default function ListingForm({
+  existing,
+  initial,
+  autofilled,
+}: {
+  existing?: Listing
+  /** Pre-filled values, e.g. parsed from a WhatsApp message or a map pin. */
+  initial?: ListingDraft
+  /** Which of those came from parsed text, so they can be flagged for review. */
+  autofilled?: Set<keyof ListingDraft>
+}) {
   const navigate = useNavigate()
   const isEdit = Boolean(existing)
+
+  /** Marks a field that was filled by the parser and should be double-checked. */
+  const fromText = (key: keyof ListingDraft) =>
+    autofilled?.has(key) ? (
+      <span className="ml-1.5 align-middle text-[10px] font-normal text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">
+        from text
+      </span>
+    ) : null
 
   // Visibility — the Pub/Pvt choice.
   const [visibility, setVisibility] = useState<Visibility>(existing?.visibility ?? 'public')
   // Address
-  const [line1, setLine1] = useState(existing?.address_line1 ?? '')
-  const [line2, setLine2] = useState(existing?.address_line2 ?? '')
-  const [city, setCity] = useState(existing?.city ?? 'Raipur')
-  const [stateName, setStateName] = useState(existing?.state ?? 'Chhattisgarh')
-  const [pincode, setPincode] = useState(existing?.pincode ?? '')
+  const [line1, setLine1] = useState(existing?.address_line1 ?? initial?.address_line1 ?? '')
+  const [line2, setLine2] = useState(existing?.address_line2 ?? initial?.address_line2 ?? '')
+  const [city, setCity] = useState(existing?.city ?? initial?.city ?? 'Raipur')
+  const [stateName, setStateName] = useState(existing?.state ?? initial?.state ?? 'Chhattisgarh')
+  const [pincode, setPincode] = useState(existing?.pincode ?? initial?.pincode ?? '')
   // Property
   const [propertyType, setPropertyType] = useState<string>(
-    existing?.property_type ?? PROPERTY_TYPES[0],
+    existing?.property_type ?? initial?.property_type ?? PROPERTY_TYPES[0],
   )
-  const [area, setArea] = useState(existing ? String(existing.area) : '')
-  const [unit, setUnit] = useState<AreaUnit>(existing?.area_unit ?? 'sqft')
-  const [rate, setRate] = useState(existing ? String(existing.rate) : '')
-  const [rateUnit, setRateUnit] = useState<RateUnit>(existing?.rate_unit ?? 'sqft')
-  const [front, setFront] = useState(existing?.front != null ? String(existing.front) : '')
-  const [frontUnit, setFrontUnit] = useState<FrontUnit>(existing?.front_unit ?? 'ft')
+  const [area, setArea] = useState(existing ? String(existing.area) : initial?.area != null ? String(initial.area) : '')
+  const [unit, setUnit] = useState<AreaUnit>(existing?.area_unit ?? initial?.area_unit ?? 'sqft')
+  const [rate, setRate] = useState(existing ? String(existing.rate) : initial?.rate != null ? String(initial.rate) : '')
+  const [rateUnit, setRateUnit] = useState<RateUnit>(existing?.rate_unit ?? initial?.rate_unit ?? 'sqft')
+  const [front, setFront] = useState(existing?.front != null ? String(existing.front) : initial?.front != null ? String(initial.front) : '')
+  const [frontUnit, setFrontUnit] = useState<FrontUnit>(existing?.front_unit ?? initial?.front_unit ?? 'ft')
   const [rateVisible, setRateVisible] = useState(existing?.rate_visible ?? true)
   const [contactType, setContactType] = useState<ContactType>(
-    existing?.contact_type ?? 'Broker',
+    existing?.contact_type ?? initial?.contact_type ?? 'Broker',
   )
   const [status, setStatus] = useState<ListingStatus>(existing?.status ?? 'Available')
   const [coords, setCoords] = useState<LatLng | null>(
-    existing ? { lat: existing.latitude, lng: existing.longitude } : null,
+    existing
+      ? { lat: existing.latitude, lng: existing.longitude }
+      : initial?.latitude != null && initial?.longitude != null
+        ? { lat: initial.latitude, lng: initial.longitude }
+        : null,
   )
-  const [notes, setNotes] = useState(existing?.notes ?? '')
+  const [notes, setNotes] = useState(existing?.notes ?? initial?.notes ?? '')
   // Media
   const [existingMedia, setExistingMedia] = useState<ListingMedia[]>(
     existing?.listing_media ?? [],
@@ -324,6 +347,17 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
         onSubmit={(e) => void handleSubmit(e)}
         className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-5"
       >
+        {autofilled && autofilled.size > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-medium text-amber-900">
+              {autofilled.size} field{autofilled.size === 1 ? '' : 's'} filled from your text
+            </p>
+            <p className="text-xs text-amber-800/80 mt-0.5">
+              Check the highlighted fields and complete anything still empty before posting.
+            </p>
+          </div>
+        )}
+
         {/* ---------- Visibility (Pub / Pvt) ---------- */}
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-900">Who can see this listing?</h2>
@@ -346,7 +380,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
         {/* ---------- Address ---------- */}
         <div className="space-y-3 border-t border-gray-100 pt-4">
           <h2 className="text-sm font-semibold text-gray-900">Property address</h2>
-          <Field label="Address line 1">
+          <Field label={<>Address line 1{fromText('address_line1')}</>}>
             <input
               type="text"
               required
@@ -366,7 +400,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="City">
+            <Field label={<>City{fromText('city')}</>}>
               <input
                 type="text"
                 required
@@ -385,7 +419,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
               />
             </Field>
           </div>
-          <Field label="Pincode" optional>
+          <Field label={<>Pincode{fromText('pincode')}</>} optional>
             <input
               type="text"
               inputMode="numeric"
@@ -401,7 +435,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
         <div className="space-y-3 border-t border-gray-100 pt-4">
           <h2 className="text-sm font-semibold text-gray-900">Property details</h2>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Type">
+            <Field label={<>Type{fromText('property_type')}</>}>
               <select
                 value={propertyType}
                 onChange={(e) => setPropertyType(e.target.value)}
@@ -414,7 +448,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
                 ))}
               </select>
             </Field>
-            <Field label="Contact type">
+            <Field label={<>Contact type{fromText('contact_type')}</>}>
               <select
                 value={contactType}
                 onChange={(e) => setContactType(e.target.value as ContactType)}
@@ -441,7 +475,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
             </Field>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Total area">
+            <Field label={<>Total area{fromText('area')}</>}>
               <input
                 type="number"
                 required
@@ -465,7 +499,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Front (road-facing)" optional>
+            <Field label={<>Front (road-facing){fromText('front')}</>} optional>
               <input
                 type="number"
                 min="0.01"
@@ -488,7 +522,13 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
             </Field>
           </div>
 
-          <Field label={`Rate (₹ per ${rateUnit === 'acre' ? 'acre' : 'sqft'})`}>
+          <Field
+            label={
+              <>
+                Rate (₹ per {rateUnit === 'acre' ? 'acre' : 'sqft'}){fromText('rate')}
+              </>
+            }
+          >
             <div className="flex gap-2">
               <input
                 type="number"
@@ -543,7 +583,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
 
         {/* ---------- Notes ---------- */}
         <div className="border-t border-gray-100 pt-4">
-          <Field label="Notes" optional>
+          <Field label={<>Notes{fromText('notes')}</>} optional>
             <textarea
               rows={3}
               placeholder="Facing, road width, negotiability, documents…"

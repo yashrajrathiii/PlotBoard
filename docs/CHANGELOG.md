@@ -10,6 +10,37 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-01
+
+**Phase 4: add from the map, and import from WhatsApp.** Both funnel through
+one rule-based parser and the normal listing form — nothing is ever saved
+without the broker reviewing it, which is what makes rule-based parsing good
+enough here.
+
+- **`listingParser.ts`** extracts area + unit (including **gaj**, **decimal**,
+  **guntha** and **hectare**, which brokers here actually use), rate per sqft
+  *or* per acre, lakh/crore amounts, Indian comma grouping, frontage, pincode,
+  property type, status and owner-vs-broker. Behind a `ListingParser`
+  interface so an AI parser can replace the rules without touching the UI.
+- **A parser test suite** (`npm run test:parser`) caught a real bug before it
+  shipped: the rate pattern was matching the *area*, so "2400 sqft" parsed as
+  a ₹2,400 rate. Rates now require an explicit signal — a cue word/symbol, a
+  per/slash split, or the `psf` suffix. 7/7 samples pass.
+- **`/import`** — paste a WhatsApp message, review, post.
+- **`/map/add`** — find the plot in Google (Places search + satellite), drop
+  the pin, describe it in plain text, continue to the form with the
+  coordinates already set.
+- `ListingForm` gained `initial` + `autofilled`: parsed values pre-fill the
+  form, each flagged with a small "from text" badge, plus a banner telling the
+  broker how many fields to check.
+
+Verified live with both keys: "Amleshwar farm land / 2 acre / 80 lakh per acre
+/ 30 ft front, owner direct" → 10 fields filled, rate 8000000 per **acre**;
+and a map pin at 21.21, 81.70 carried into the form with area 2400 sqft, front
+40 ft, rate 3200/sqft, type Commercial Plot.
+
+---
+
 ## 2026-07-31
 
 **Phase 3: Map View tab** — `/map`, one Mapbox satellite map with a pin per
