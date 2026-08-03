@@ -16,7 +16,7 @@ import {
   type Visibility,
 } from '../lib/types'
 import type { LatLng } from '../lib/geo'
-import type { ListingDraft } from '../lib/listingParser'
+import type { ListingDraft, ParsedListing } from '../lib/listingParser'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
 import { deleteMedia, refreshStaticMap, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
@@ -65,12 +65,15 @@ export default function ListingForm({
   existing,
   initial,
   autofilled,
+  engine,
 }: {
   existing?: Listing
   /** Pre-filled values, e.g. parsed from a WhatsApp message or a map pin. */
   initial?: ListingDraft
   /** Which of those came from parsed text, so they can be flagged for review. */
   autofilled?: Set<keyof ListingDraft>
+  /** Which parser produced `initial` — surfaced in the banner. */
+  engine?: ParsedListing['engine']
 }) {
   const navigate = useNavigate()
   const isEdit = Boolean(existing)
@@ -349,9 +352,19 @@ export default function ListingForm({
       >
         {autofilled && autofilled.size > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm font-medium text-amber-900">
-              {autofilled.size} field{autofilled.size === 1 ? '' : 's'} filled from your text
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-amber-900">
+                {autofilled.size} field{autofilled.size === 1 ? '' : 's'} filled from your text
+              </p>
+              {/* Shows at a glance whether the AI parser ran or the offline
+                  rules did — the only way to tell that the Gemini key is
+                  actually working without opening the network tab. */}
+              {engine && (
+                <span className="text-[11px] font-medium text-amber-900/70 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">
+                  {engine === 'ai' ? 'read by AI' : 'read offline'}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-amber-800/80 mt-0.5">
               Check the highlighted fields and complete anything still empty before posting.
             </p>

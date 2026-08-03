@@ -10,6 +10,54 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-04
+
+**AI parsing of broker text, with the rules kept as the floor.**
+
+- **Gemini now reads pasted messages.** New `parse-listing` Edge Function
+  (deployed, v2) sends the text to Gemini with a fixed JSON response schema and
+  returns listing fields. Both capture flows — Import from WhatsApp and Add
+  from map — use it via the new `smartParser`.
+  Rationale: three separate parser bugs shipped in one week (`sq/ft`
+  separators, the rate pattern matching the *area*, a spec line becoming the
+  address), and each fix only covered the case we happened to see. The one
+  distinction rules genuinely cannot make is **rate vs total** — "@2500" is a
+  per-sqft rate, "price 45 lakh" is the whole deal — which needs reading
+  comprehension, not pattern matching.
+- **The rule-based parser is not gone; it is the floor.** `smartParser` runs it
+  first (instant, free, offline) and layers the AI on top: AI wins where it
+  produced a value, rules fill every gap. *Any* failure — no key, offline,
+  timeout, rate-limited, malformed reply — silently returns the rule-based
+  result, so the app behaves exactly as it did before this change. Verified
+  end-to-end before the key existed.
+- **`mergeParsed` keeps units with their values.** Taking the AI's `area` while
+  keeping the rules' `area_unit` would turn 5 acres into 5 sqft, so
+  `area`/`area_unit`, `rate`/`rate_unit` and `front`/`front_unit` are each
+  applied only when both halves are present. Five new tests pin this; the suite
+  is now **19 passing** and runs with no network and no key.
+- **Model: `gemini-3.5-flash-lite`**, chosen on the free tier's
+  requests-per-day cap rather than on quality. Flash models allow 20 RPD,
+  Flash-Lite allows 500. Twenty brokers sharing 20 parses/day would be
+  exhausted by one person importing a backlog; 500 turns ~4× headroom into
+  ~100×. Override with the `GEMINI_MODEL` secret, no redeploy. **Cost: ₹0**,
+  entirely inside the free tier.
+- **The banner now says how the text was read** — "read by AI" or "read
+  offline". Without it there is no way to tell whether the key is working,
+  because the fallback is deliberately silent.
+- **`{ action: "models" }`** on the function lists the model IDs the key can
+  actually reach. A wrong model ID fails as a 404 that looks identical to "the
+  AI isn't working"; this makes it a fact instead of a guess.
+- **The key is server-side only.** Unlike the Mapbox and Google Maps *browser*
+  keys — public by design, protected by domain restrictions — a Gemini key has
+  no such protection and must never become a `VITE_*` variable. It lives in the
+  Edge Function's secrets with the service-role key. Spend is bounded by
+  requiring a signed-in caller, a 4,000-character input cap, and a 12s timeout.
+- Pasted text is treated as **untrusted data, not instructions**. The model's
+  only output channel is the fixed schema, and every field is re-validated
+  server-side against the allowed enums and numeric ranges before it reaches
+  the form.
+- New [`docs/PARSER.md`](PARSER.md) covers all of the above, plus setup.
+
 ## 2026-08-02
 
 **Locality from the map pin, and `@` rate semantics.**

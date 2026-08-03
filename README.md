@@ -122,6 +122,8 @@ plotboard/
   and how legacy Supabase files keep working alongside R2.
 - **[docs/MAPS.md](docs/MAPS.md)** — Mapbox + Google Maps setup, key
   restrictions, and why listing cards never mount a live map.
+- **[docs/PARSER.md](docs/PARSER.md)** — turning WhatsApp text into a listing:
+  the Gemini setup, the rule-based fallback, and the model/quota choice.
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Supabase + Vercel setup,
   environment variables, and post-deploy configuration.
 - **[docs/CHANGELOG.md](docs/CHANGELOG.md)** — the full development history:

@@ -45,6 +45,8 @@ export interface ParsedListing {
   autofilled: Set<keyof ListingDraft>
   /** Lines the parser could not map to anything — kept for the notes field. */
   unmatched: string[]
+  /** Which engine produced this — 'rules' when the AI was unavailable. */
+  engine?: 'rules' | 'ai'
 }
 
 export interface ListingParser {
@@ -292,6 +294,62 @@ export const ruleBasedParser: ListingParser = {
     const unmatched = lines.slice(1).filter((l) => !consumed.some((re) => re.test(l)))
     if (unmatched.length > 0) set('notes', unmatched.join('\n').slice(0, 1000))
 
-    return { fields, autofilled, unmatched }
+    return { fields, autofilled, unmatched, engine: 'rules' }
   },
+}
+
+/** Fields whose value is meaningless without its unit, so they move together. */
+const UNIT_PAIRS: [keyof ListingDraft, keyof ListingDraft][] = [
+  ['area', 'area_unit'],
+  ['rate', 'rate_unit'],
+  ['front', 'front_unit'],
+]
+
+/** Fields that can be replaced on their own. */
+const SINGLE_FIELDS: (keyof ListingDraft)[] = [
+  'address_line1',
+  'address_line2',
+  'city',
+  'state',
+  'pincode',
+  'property_type',
+  'contact_type',
+  'status',
+  'notes',
+]
+
+/**
+ * Layers a second parse (in practice the AI's) over a first (the rules'):
+ * `overlay` wins wherever it produced a value, `base` fills every gap it left.
+ *
+ * Units travel with their value. Taking the overlay's `area` while keeping the
+ * base's `area_unit` could turn 5 acres into 5 sqft, so a pair is applied only
+ * when the overlay supplies BOTH halves — the single most damaging mistake
+ * this merge could make, and the reason it isn't a plain object spread.
+ */
+export function mergeParsed(
+  base: ParsedListing,
+  overlay: ListingDraft,
+): ParsedListing {
+  const fields: ListingDraft = { ...base.fields }
+  const autofilled = new Set<keyof ListingDraft>(base.autofilled)
+
+  const take = <K extends keyof ListingDraft>(k: K) => {
+    fields[k] = overlay[k]
+    autofilled.add(k)
+  }
+  const has = (k: keyof ListingDraft) =>
+    overlay[k] !== undefined && overlay[k] !== null && overlay[k] !== ''
+
+  for (const [value, unit] of UNIT_PAIRS) {
+    if (has(value) && has(unit)) {
+      take(value)
+      take(unit)
+    }
+  }
+  for (const key of SINGLE_FIELDS) {
+    if (has(key)) take(key)
+  }
+
+  return { fields, autofilled, unmatched: base.unmatched, engine: 'ai' }
 }

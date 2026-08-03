@@ -2,11 +2,8 @@ import { useState } from 'react'
 import { ClipboardPaste, Sparkles } from 'lucide-react'
 import ListingForm from '../components/ListingForm'
 import BackButton from '../components/BackButton'
-import {
-  ruleBasedParser,
-  type ListingDraft,
-  type ParsedListing,
-} from '../lib/listingParser'
+import { smartParser } from '../lib/aiParser'
+import type { ListingDraft, ParsedListing } from '../lib/listingParser'
 
 const SAMPLE = `Kachna main road, Raipur
 2400 sqft residential plot
@@ -28,7 +25,7 @@ export default function ImportListingPage() {
   const handleParse = async () => {
     if (!text.trim()) return
     setBusy(true)
-    setParsed(await ruleBasedParser.parse(text))
+    setParsed(await smartParser.parse(text))
     setBusy(false)
   }
 
@@ -46,6 +43,7 @@ export default function ImportListingPage() {
       <ListingForm
         initial={parsed.fields as ListingDraft}
         autofilled={parsed.autofilled}
+        engine={parsed.engine}
       />
     )
   }

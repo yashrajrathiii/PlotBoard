@@ -1,4 +1,8 @@
-import { ruleBasedParser } from '../src/lib/listingParser'
+import {
+  mergeParsed,
+  ruleBasedParser,
+  type ListingDraft,
+} from '../src/lib/listingParser'
 
 const samples: { label: string; text: string; expect: Record<string, unknown> }[] = [
   {
@@ -114,4 +118,69 @@ for (const s of samples) {
     console.log(`        parsed: ${JSON.stringify(fields)}`)
   }
 }
+// ---------------------------------------------------------------------------
+// mergeParsed — how the AI result layers over the rule-based one.
+// These run without network or a Gemini key; they pin the merge contract only.
+// ---------------------------------------------------------------------------
+
+const mergeCases: {
+  label: string
+  base: ListingDraft
+  overlay: ListingDraft
+  expect: Record<string, unknown>
+}[] = [
+  {
+    label: 'merge: AI wins where both filled a field',
+    base: { area: 2400, area_unit: 'sqft', city: 'Raipur' },
+    overlay: { area: 5000, area_unit: 'sqft' },
+    expect: { area: 5000, area_unit: 'sqft', city: 'Raipur' },
+  },
+  {
+    label: 'merge: rules fill the gaps AI left',
+    base: { area: 2400, area_unit: 'sqft', city: 'Raipur', property_type: 'Residential Plot' },
+    overlay: { rate: 1850, rate_unit: 'sqft' },
+    expect: { area: 2400, city: 'Raipur', property_type: 'Residential Plot', rate: 1850 },
+  },
+  {
+    label: 'merge: a unit pair is replaced whole (acre must not inherit sqft)',
+    base: { area: 5, area_unit: 'sqft' },
+    overlay: { area: 5, area_unit: 'acre' },
+    expect: { area: 5, area_unit: 'acre' },
+  },
+  {
+    label: 'merge: a value without its unit is ignored entirely',
+    base: { area: 2400, area_unit: 'sqft' },
+    overlay: { area: 5 },
+    expect: { area: 2400, area_unit: 'sqft' },
+  },
+  {
+    label: 'merge: empty strings from the model never overwrite',
+    base: { address_line1: 'Plot 42, near water tank', city: 'Raipur' },
+    overlay: { address_line1: '', city: 'Bhilai' },
+    expect: { address_line1: 'Plot 42, near water tank', city: 'Bhilai' },
+  },
+]
+
+for (const c of mergeCases) {
+  const merged = mergeParsed(
+    { fields: c.base, autofilled: new Set(Object.keys(c.base) as (keyof ListingDraft)[]), unmatched: [] },
+    c.overlay,
+  )
+  const misses: string[] = []
+  for (const [k, v] of Object.entries(c.expect)) {
+    const got = (merged.fields as Record<string, unknown>)[k]
+    if (got !== v) misses.push(`${k}: expected ${JSON.stringify(v)}, got ${JSON.stringify(got)}`)
+  }
+  if (misses.length === 0) {
+    pass++
+    console.log(`PASS  ${c.label}`)
+  } else {
+    fail++
+    console.log(`FAIL  ${c.label}`)
+    misses.forEach((m) => console.log(`        ${m}`))
+    console.log(`        merged: ${JSON.stringify(merged.fields)}`)
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
+if (fail > 0) process.exit(1)

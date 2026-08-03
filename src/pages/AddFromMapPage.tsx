@@ -5,11 +5,8 @@ import ListingForm from '../components/ListingForm'
 import BackButton from '../components/BackButton'
 import type { LatLng } from '../lib/geo'
 import type { PlaceAddress } from '../lib/maps/reverseGeocode'
-import {
-  ruleBasedParser,
-  type ListingDraft,
-  type ParsedListing,
-} from '../lib/listingParser'
+import { smartParser } from '../lib/aiParser'
+import type { ListingDraft, ParsedListing } from '../lib/listingParser'
 
 /**
  * Post a property straight from the map: find the plot with Google (its Indian
@@ -30,8 +27,8 @@ export default function AddFromMapPage() {
   const handleContinue = async () => {
     if (!coords) return
     setBusy(true)
-    const result = text.trim()
-      ? await ruleBasedParser.parse(text)
+    const result: ParsedListing = text.trim()
+      ? await smartParser.parse(text)
       : { fields: {}, autofilled: new Set<keyof ListingDraft>(), unmatched: [] }
     // The dropped pin always wins over anything in the text.
     result.fields.latitude = coords.lat
@@ -67,6 +64,7 @@ export default function AddFromMapPage() {
       <ListingForm
         initial={parsed.fields as ListingDraft}
         autofilled={parsed.autofilled}
+        engine={parsed.engine}
       />
     )
   }
