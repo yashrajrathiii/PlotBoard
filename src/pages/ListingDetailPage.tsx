@@ -12,7 +12,7 @@ import {
 import { useListing } from '../hooks/useListing'
 import { useAuth } from '../context/AuthContext'
 import { deleteListing } from '../lib/listingActions'
-import { addressLines, type Listing } from '../lib/types'
+import { addressLines } from '../lib/types'
 import {
   formatAreaEntered,
   formatFront,
@@ -26,6 +26,7 @@ import { StatusChip } from '../components/ListingCard'
 import ListingGallery from '../components/ListingGallery'
 import ShareMenu from '../components/ShareMenu'
 import BackButton from '../components/BackButton'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -42,6 +43,8 @@ export default function ListingDetailPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   if (loading) return <FullScreenSpinner />
 
@@ -68,19 +71,16 @@ export default function ListingDetailPage() {
   const canSeeRate = listing.rate_visible || isOwner
   const lines = addressLines(listing)
 
-  const handleDelete = async (l: Listing) => {
-    if (
-      !window.confirm(
-        `Delete "${l.address_line1}, ${l.city}" permanently? Its photos and video are removed too.`,
-      )
-    ) {
-      return
-    }
+  const handleDelete = async () => {
     setDeleting(true)
-    const err = await deleteListing(l)
+    setDeleteError(null)
+    const err = await deleteListing(listing)
     if (err) {
-      window.alert(`Could not delete: ${err}`)
+      // Show the failure in-page rather than via alert(), which is suppressed
+      // in installed PWAs exactly like confirm() is.
+      setDeleteError(err)
       setDeleting(false)
+      setConfirmOpen(false)
       return
     }
     navigate('/my-listings', { replace: true })
@@ -200,24 +200,42 @@ export default function ListingDetailPage() {
 
           {/* Owner actions — inside the listing view */}
           {isOwner && (
-            <div className="flex gap-2 border-t border-gray-100 pt-4">
-              <Link
-                to={`/edit/${listing.id}`}
-                className="flex-1 flex items-center justify-center gap-1.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium rounded-lg py-2.5"
-              >
-                <Pencil size={15} /> Edit listing
-              </Link>
-              <button
-                onClick={() => void handleDelete(listing)}
-                disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1.5 border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-medium rounded-lg py-2.5"
-              >
-                <Trash2 size={15} /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+            <div className="border-t border-gray-100 pt-4">
+              {deleteError && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg p-3 mb-3">
+                  {deleteError}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Link
+                  to={`/edit/${listing.id}`}
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium rounded-lg py-2.5"
+                >
+                  <Pencil size={15} /> Edit listing
+                </Link>
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={deleting}
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-medium rounded-lg py-2.5"
+                >
+                  <Trash2 size={15} /> {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        destructive
+        busy={deleting}
+        title="Delete this listing?"
+        message={`"${listing.address_line1}, ${listing.city}" will be permanently removed, along with its photos and video. This cannot be undone.`}
+        confirmLabel="Delete listing"
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   )
 }

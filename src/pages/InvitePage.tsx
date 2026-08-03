@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { AlertTriangle, Check, Copy, Link2, Send, Trash2, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { copyText, whatsappShareUrl } from '../lib/share'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface Member {
   id: string
@@ -63,6 +64,7 @@ export default function InvitePage() {
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [pendingRemoval, setPendingRemoval] = useState<Member | null>(null)
   const [degraded, setDegraded] = useState<string | null>(null)
 
   const loadMembers = async () => {
@@ -153,16 +155,20 @@ export default function InvitePage() {
     setBusy(null)
   }
 
-  const handleRemove = async (m: Member) => {
-    const label = m.email || m.name || 'this member'
-    const verb = m.joined ? 'Remove' : 'Cancel the invite for'
-    if (!window.confirm(`${verb} ${label}? This cannot be undone.`)) return
+  // Confirmed in-app: window.confirm/alert are suppressed in installed PWAs,
+  // which silently turned this into a no-op.
+  const handleRemove = async () => {
+    const m = pendingRemoval
+    if (!m) return
     setRemovingId(m.id)
+    setError(null)
     try {
       await callFn({ action: 'delete', userId: m.id })
+      setPendingRemoval(null)
       await loadMembers()
     } catch (err) {
-      window.alert((err as FnError).message)
+      setError((err as FnError).message)
+      setPendingRemoval(null)
     }
     setRemovingId(null)
   }
@@ -319,7 +325,7 @@ export default function InvitePage() {
                 </span>
                 {!m.is_admin && (
                   <button
-                    onClick={() => void handleRemove(m)}
+                    onClick={() => setPendingRemoval(m)}
                     disabled={removingId === m.id}
                     title={m.joined ? 'Remove member' : 'Cancel invite'}
                     className="flex items-center gap-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2 py-1.5"
@@ -337,6 +343,24 @@ export default function InvitePage() {
           ))}
         </ul>
       </div>
+
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        destructive
+        busy={removingId !== null}
+        title={pendingRemoval?.joined ? 'Remove this member?' : 'Cancel this invite?'}
+        message={
+          pendingRemoval
+            ? `${pendingRemoval.email || pendingRemoval.name || 'This person'} will lose access${
+                pendingRemoval.joined ? '' : ' and the pending invite will be revoked'
+              }. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel={pendingRemoval?.joined ? 'Remove' : 'Cancel invite'}
+        cancelLabel="Keep"
+        onConfirm={() => void handleRemove()}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   )
 }

@@ -20,6 +20,7 @@ import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
 import { deleteMedia, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
 import BackButton from './BackButton'
+import ConfirmDialog from './ConfirmDialog'
 
 interface PendingPhoto {
   file: File
@@ -97,6 +98,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
   const [photos, setPhotos] = useState<PendingPhoto[]>([])
   const [video, setVideo] = useState<PendingVideo | null>(null)
   const [mediaBusy, setMediaBusy] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<ListingMedia | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
 
@@ -154,12 +156,16 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
     setPhotos(photos.filter((_, i) => i !== index))
   }
 
-  const removeExistingMedia = async (m: ListingMedia) => {
-    if (!window.confirm('Remove this file from the listing? This cannot be undone.')) return
+  // Confirmed via ConfirmDialog rather than window.confirm(), which is
+  // suppressed in installed PWAs (it returns false, silently cancelling).
+  const removeExistingMedia = async () => {
+    const m = pendingRemoval
+    if (!m) return
     setMediaBusy(true)
     await deleteMedia([m])
     await supabase.from('listing_media').delete().eq('id', m.id)
     setExistingMedia(existingMedia.filter((x) => x.id !== m.id))
+    setPendingRemoval(null)
     setMediaBusy(false)
   }
 
@@ -568,7 +574,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
                 )}
                 <button
                   type="button"
-                  onClick={() => void removeExistingMedia(m)}
+                  onClick={() => setPendingRemoval(m)}
                   aria-label="Remove existing photo"
                   className="absolute -top-1.5 -right-1.5 bg-gray-900/80 text-white rounded-full p-0.5"
                 >
@@ -624,7 +630,7 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
               </span>
               <button
                 type="button"
-                onClick={() => void removeExistingMedia(existingVideo)}
+                onClick={() => setPendingRemoval(existingVideo)}
                 aria-label="Remove existing video"
                 className="text-gray-400 hover:text-red-600 p-1"
               >
@@ -684,6 +690,17 @@ export default function ListingForm({ existing }: { existing?: Listing }) {
           {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Post listing'}
         </button>
       </form>
+
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        destructive
+        busy={mediaBusy}
+        title={pendingRemoval?.media_type === 'video' ? 'Remove this video?' : 'Remove this photo?'}
+        message="It will be deleted from the listing and from storage. This cannot be undone."
+        confirmLabel="Remove"
+        onConfirm={() => void removeExistingMedia()}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   )
 }

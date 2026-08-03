@@ -12,6 +12,20 @@ export async function deleteListing(
   listing: Pick<Listing, 'id' | 'listing_media'>,
 ): Promise<string | null> {
   await deleteMedia(listing.listing_media)
-  const { error } = await supabase.from('listings').delete().eq('id', listing.id)
-  return error ? error.message : null
+
+  // `.select()` matters: a DELETE filtered out by RLS affects zero rows and
+  // still returns error === null. Without checking what came back, a blocked
+  // delete would look like success and the UI would navigate away while the
+  // listing was still there.
+  const { data, error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', listing.id)
+    .select('id')
+
+  if (error) return error.message
+  if (!data || data.length === 0) {
+    return "That listing couldn't be deleted — it may already be gone, or it isn't yours to delete."
+  }
+  return null
 }
