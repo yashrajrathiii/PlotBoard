@@ -78,6 +78,31 @@ session, with bullets for what shipped and *why* where it matters.
 | Prompt-injection attempt | Ignored entirely; only real property data extracted |
 | `bhai kal milte hain chai peene` | Empty — nothing hallucinated |
 
+**Dependency advisories cleared (`npm audit fix`).** `brace-expansion`,
+`fast-uri` and `postcss` patched — all three are build-tooling transitive deps
+that never reach the browser (they disappear under `npm audit --omit=dev`).
+Only `package-lock.json` changed, and the built CSS hash was byte-identical
+afterwards, so the postcss bump altered no output.
+
+**`react-router` was deliberately left alone.** It is flagged high for
+[GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2), *"RSC
+Mode CSRF Bypass"* — a vulnerability in React Router's **React Server
+Components** mode, which requires a server runtime and an explicit opt-in.
+PlotBoard is a static client-side SPA using `BrowserRouter` (`main.tsx:28`)
+with no React Router server, so nothing the bypass targets exists here. The
+offered remedy is worse than the problem: `npm audit fix --force` *downgrades*
+to `react-router-dom@7.11.0`, a breaking change, to escape a vulnerability we
+don't have. **Upgrade forward when a patched 7.x ships.**
+
+**Supabase security advisors reviewed** — two warnings, one actionable:
+- `update_listing_status` being `SECURITY DEFINER` and callable by
+  `authenticated` is **intentional**. That is precisely the RPC pattern that
+  lets any member change a listing's status without being able to edit other
+  fields of someone else's listing. The linter cannot see the intent. No action.
+- **Leaked password protection is disabled** — genuine. Enable it under
+  Authentication → password settings so Supabase checks new passwords against
+  HaveIBeenPwned.
+
 ## 2026-08-02
 
 **Locality from the map pin, and `@` rate semantics.**
