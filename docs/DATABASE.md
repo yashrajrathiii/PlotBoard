@@ -34,7 +34,7 @@ The shared board. Validation lives in the DB, not just the UI.
 | `area`, `area_unit` | `area > 0`; unit `acre` \| `sqft`                        |
 | `rate`           | ₹ per sqft, `rate > 0`                                      |
 | `rate_visible`   | poster's choice to show/hide the rate from others          |
-| `contact_type`   | enum: Owner direct \| Broker                                |
+| `contact_type`   | text + check: `Broker` (long chain) \| `Direct` (one broker in between) \| `Owner` (the contact owns it) |
 | `notes`          | optional                                                    |
 | `latitude`, `longitude` | India bounding-box check (6.5–37.5 N, 68–97.5 E)     |
 | `status`         | enum: Available \| Under discussion \| Sold                |

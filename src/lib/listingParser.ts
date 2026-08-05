@@ -238,8 +238,14 @@ export const ruleBasedParser: ListingParser = {
       set('status', 'Under discussion')
 
     // ---- contact type ------------------------------------------------------
-    if (/\b(owner|direct\s*owner|owner\s*direct)\b/i.test(t)) {
-      set('contact_type', 'Owner direct')
+    // Checked most-specific first. "Owner" is a claim about who the contact
+    // IS, so it beats "direct" — a broker writing "owner direct" is saying the
+    // owner is reachable, not that there is one broker in the chain. Bare
+    // "direct" with no owner word is the middle case: one broker in between.
+    if (/\b(owner|malik|maalik)\b/i.test(t)) {
+      set('contact_type', 'Owner')
+    } else if (/\bdirect\b/i.test(t)) {
+      set('contact_type', 'Direct')
     } else if (/\b(broker|agent|dalal)\b/i.test(t)) {
       set('contact_type', 'Broker')
     }

@@ -7,6 +7,7 @@ import {
   LISTING_STATUSES,
   PROPERTY_TYPES,
   type AreaUnit,
+  CONTACT_TYPES,
   type ContactType,
   type FrontUnit,
   type RateUnit,
@@ -467,8 +468,9 @@ export default function ListingForm({
                 onChange={(e) => setContactType(e.target.value as ContactType)}
                 className={inputClass}
               >
-                <option>Broker</option>
-                <option>Owner direct</option>
+                {CONTACT_TYPES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
             </Field>
           </div>

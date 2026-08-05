@@ -10,6 +10,45 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-05
+
+**Contact type is now three-way: Broker / Direct / Owner.**
+
+- Migration `012_contact_type_three_way.sql` (applied). The listing now records
+  **how far the poster is from the property**:
+  | Value | Meaning |
+  | --- | --- |
+  | `Owner` | the contact is the owner |
+  | `Direct` | exactly one broker in between |
+  | `Broker` | a longer chain of brokers |
+- **The 4 existing `Owner direct` listings became `Owner`.** That label always
+  meant the owner themselves; `Direct` is a genuinely new, narrower category
+  that no existing row was ever recorded against.
+- **The enum became text + a check constraint**, matching how `visibility`
+  (007) and `rate_unit` (010) are already modelled. Postgres cannot add a value
+  to an enum and use it in the same transaction, so every future change to this
+  list would otherwise need its own two-step migration. Verified beforehand
+  that `listings.contact_type` was the enum's only dependant — no other column,
+  function argument or return type — before dropping it.
+- `CONTACT_TYPES` is now a single exported const in `types.ts` that the form
+  maps over, so the next change to this list is one line rather than a hunt for
+  hardcoded `<option>` tags.
+- **Parser rules updated, most-specific-first.** An owner claim beats a
+  "direct" claim: a broker writing "owner direct" is saying the owner is
+  reachable, not that there is one broker in the chain. Bare "direct" with no
+  owner word is the middle case. "malik"/"maalik" now count as owner.
+- **Gemini prompt and schema updated** (`parse-listing` v4). Verified live —
+  all five distinctions correct, including *"ek broker beech me hai, direct"*
+  → `Direct`:
+  | Text | Result |
+  | --- | --- |
+  | `owner direct` | Owner |
+  | `direct deal no chain` | Direct |
+  | `broker ke through, 2-3 log beech me hai` | Broker |
+  | `seedha malik se baat karo` | Owner |
+  | `ek broker beech me hai, direct` | Direct |
+- Four new parser tests pin the three-way split; suite is now **25 passing**.
+
 ## 2026-08-04
 
 **AI parsing of broker text, with the rules kept as the floor.**

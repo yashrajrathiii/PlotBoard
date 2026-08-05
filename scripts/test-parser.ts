@@ -11,7 +11,29 @@ const samples: { label: string; text: string; expect: Record<string, unknown> }[
 2400 sqft residential plot
 Rate 1850 per sqft
 Owner direct, 9876543210`,
-    expect: { area: 2400, area_unit: 'sqft', rate: 1850, rate_unit: 'sqft', property_type: 'Residential Plot', contact_type: 'Owner direct', city: 'Raipur' },
+    expect: { area: 2400, area_unit: 'sqft', rate: 1850, rate_unit: 'sqft', property_type: 'Residential Plot', contact_type: 'Owner', city: 'Raipur' },
+  },
+  {
+    // An owner claim beats a "direct" claim: "owner direct" means the owner is
+    // reachable, not that there is one broker in the chain.
+    label: 'contact: "owner direct" is Owner, not Direct',
+    text: 'Tagore Nagar, 1500 sqft plot, owner direct',
+    expect: { contact_type: 'Owner' },
+  },
+  {
+    label: 'contact: bare "direct" with no owner word is Direct',
+    text: 'Kachna, 1500 sqft plot, direct deal, no chain',
+    expect: { contact_type: 'Direct' },
+  },
+  {
+    label: 'contact: broker with no owner/direct claim is Broker',
+    text: 'Shankar Nagar, 1500 sqft plot, broker ke through',
+    expect: { contact_type: 'Broker' },
+  },
+  {
+    label: 'contact: "malik" (Hindi for owner) is Owner',
+    text: 'Gudhiyari, 200 gaj, seedha malik se baat karo',
+    expect: { contact_type: 'Owner' },
   },
   {
     label: 'acre + per-acre rate',

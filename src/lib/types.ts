@@ -15,7 +15,15 @@ export type RateUnit = 'sqft' | 'acre'
 /** Frontage is a length, so it gets its own unit domain. */
 export type FrontUnit = 'ft' | 'm'
 export type ListingStatus = 'Available' | 'Under discussion' | 'Sold'
-export type ContactType = 'Owner direct' | 'Broker'
+/**
+ * How far the poster is from the property:
+ *   Owner  — the contact is the owner
+ *   Direct — exactly one broker in between
+ *   Broker — a longer chain of brokers
+ */
+export const CONTACT_TYPES = ['Broker', 'Direct', 'Owner'] as const
+
+export type ContactType = (typeof CONTACT_TYPES)[number]
 export type Visibility = 'public' | 'private'
 
 export const LISTING_STATUSES: ListingStatus[] = [

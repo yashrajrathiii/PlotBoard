@@ -103,7 +103,9 @@ const RESPONSE_SCHEMA = {
     front_unit: { type: "STRING", enum: ["ft", "m", "unknown"] },
     contact_type: {
       type: "STRING",
-      enum: ["Owner direct", "Broker", "unknown"],
+      enum: ["Broker", "Direct", "Owner", "unknown"],
+      description:
+        "How far the contact is from the property. Owner: the contact owns it. Direct: exactly one broker in between. Broker: a longer chain.",
     },
     status: {
       type: "STRING",
@@ -160,6 +162,14 @@ ADDRESS: address_line1 is where the plot IS — a colony, road or landmark.
 A line describing size, type or price ("2400 sq.ft residential plot, @2500") is
 NOT an address; leave address_line1 absent in that case rather than copying the
 description into it.
+
+CONTACT TYPE — how far the contact is from the property:
+  "Owner" if the contact is the owner ("owner", "malik", "owner direct",
+  "seedha malik se"). An owner claim beats a "direct" claim.
+  "Direct" if the text says direct but not owner — exactly one broker between
+  the contact and the owner.
+  "Broker" for a longer chain, or when a broker/agent/dalal is mentioned with
+  no owner or direct claim.
 
 NOTES: do not repeat anything already captured in another field.
 
@@ -244,7 +254,7 @@ function validate(raw: Record<string, unknown>) {
     put("front_unit", frontUnit ?? "ft");
   }
 
-  put("contact_type", pickEnum(raw.contact_type, ["Owner direct", "Broker"] as const));
+  put("contact_type", pickEnum(raw.contact_type, ["Broker", "Direct", "Owner"] as const));
   put(
     "status",
     pickEnum(raw.status, ["Available", "Under discussion", "Sold"] as const),
