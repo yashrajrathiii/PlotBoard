@@ -29,6 +29,15 @@ verified end to end.**
   object and its temporary row were removed; only the real thumbnail remains.
 - `MAPBOX_TOKEN` confirmed working — the server-side Mapbox fetch succeeded.
 
+- **Production switched to R2** (`VITE_MEDIA_PROVIDER=r2` on Vercel) and
+  confirmed in the deployed bundle, where `activeProvider()` is constant-folded
+  to `` function Tu(){return`r2`} ``. Unset, Vite would have folded it to
+  `"supabase"` instead, so the compiled output is proof rather than inference.
+- **Backfilled satellite thumbnails for all 9 listings** — 8 Mapbox calls
+  against a 50,000/month free tier. The board now serves 16 images from R2 and
+  2 legacy photos from Supabase Storage, none broken: the hybrid read path
+  working at full board scale rather than on a single test row.
+
 **Two diagnoses worth keeping.**
 
 - **A browser "CORS" error on upload was not CORS.** R2 rejected the presigned
