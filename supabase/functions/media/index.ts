@@ -200,19 +200,37 @@ Deno.serve(async (req: Request) => {
       const paths: string[] = Array.isArray(body.paths) ? body.paths : [];
       if (paths.length === 0) return json({ ok: true, urls: {} });
 
-      // RLS on listing_media ("read via visible listing") filters this down to
-      // the files this member is actually allowed to see — private listings
-      // belonging to others simply don't come back.
-      const { data: visible, error } = await userClient
-        .from("listing_media")
-        .select("storage_path")
-        .in("storage_path", paths)
-        .eq("storage_provider", "r2");
-      if (error) return json({ error: error.message }, 500);
+      // R2 objects are reachable from two different tables, and BOTH must be
+      // checked here: uploaded photos/video are rows in listing_media, while a
+      // cached satellite thumbnail is a column on listings. Querying only
+      // listing_media silently returned no URL for every thumbnail, so the
+      // static-map feature could never render.
+      //
+      // Both queries run as the caller, so RLS does the authorization — a
+      // member cannot obtain a URL for someone else's private listing.
+      const [mediaRes, mapRes] = await Promise.all([
+        userClient
+          .from("listing_media")
+          .select("storage_path")
+          .in("storage_path", paths)
+          .eq("storage_provider", "r2"),
+        userClient
+          .from("listings")
+          .select("static_map_path")
+          .in("static_map_path", paths),
+      ]);
+      if (mediaRes.error) return json({ error: mediaRes.error.message }, 500);
+      if (mapRes.error) return json({ error: mapRes.error.message }, 500);
+
+      const visible = new Set<string>();
+      for (const row of mediaRes.data ?? []) visible.add(row.storage_path);
+      for (const row of mapRes.data ?? []) {
+        if (row.static_map_path) visible.add(row.static_map_path);
+      }
 
       const urls: Record<string, string> = {};
-      for (const row of visible ?? []) {
-        urls[row.storage_path] = await presign(row.storage_path, "GET", 3600); // 1 hour
+      for (const path of visible) {
+        urls[path] = await presign(path, "GET", 3600); // 1 hour
       }
       return json({ ok: true, urls });
     }

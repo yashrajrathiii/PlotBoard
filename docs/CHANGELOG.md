@@ -10,6 +10,39 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-10
+
+**Cloudflare R2 is live — uploads, reads, deletes and cached thumbnails all
+verified end to end.**
+
+- **`read-urls` could never resolve a cached thumbnail.** It looked every path
+  up in `listing_media`, but a static map path lives on `listings
+  .static_map_path`, so thumbnails were filtered out and silently returned no
+  URL. The static-map feature had never been able to render. It now checks both
+  tables, still entirely through the caller's client so RLS remains the
+  authorization boundary. (`media` v5)
+- Verified in the browser: the board now renders a satellite thumbnail from R2
+  **and** legacy Supabase photos side by side, proving the hybrid path.
+- Full round trip confirmed: presigned PUT `200` with a readable `ETag` (so
+  `ExposeHeaders` is right), presigned GET returning the exact bytes, `delete`
+  removing the object, and a fresh GET afterwards returning `404`. The test
+  object and its temporary row were removed; only the real thumbnail remains.
+- `MAPBOX_TOKEN` confirmed working — the server-side Mapbox fetch succeeded.
+
+**Two diagnoses worth keeping.**
+
+- **A browser "CORS" error on upload was not CORS.** R2 rejected the presigned
+  PUT with `401`, and error responses carry no `Access-Control-Allow-Origin`
+  header, so the browser reported the missing header instead of the real
+  status. The bucket's CORS policy was correct all along — confirmed by curling
+  the preflight, which needs no credentials and returned the right headers.
+- **The cause was a hand-transcribed Access Key ID**: `dal51d…` where R2 keys
+  are 32 *hexadecimal* characters, so the `l` was an `l`-for-`1` typo. Worth
+  noting that a `200` from `upload-url` proves nothing about credentials — it
+  signs locally and never contacts R2. The test that actually touches R2 is
+  `static-map`, which PUTs server-side where CORS cannot interfere.
+  Both are now written up in [STORAGE.md](STORAGE.md#troubleshooting-uploads).
+
 ## 2026-08-05
 
 **Cloudflare R2 groundwork — migration 009 applied, `media` function deployed.**
