@@ -164,14 +164,26 @@ loading untouched.
 Supabase → **Edge Functions → Secrets**:
 
 ```
-R2_ACCOUNT_ID        = <Account ID>
+R2_ACCOUNT_ID        = <Account ID>          # bare ID, NOT the endpoint URL
 R2_ACCESS_KEY_ID     = <Access Key ID>
 R2_SECRET_ACCESS_KEY = <Secret Access Key>
 R2_BUCKET            = plotboard-media
 CLEANUP_SECRET       = <any long random string you generate>
+MAPBOX_TOKEN         = <a SECOND, UNRESTRICTED Mapbox token — see MAPS.md>
 ```
 
-These never appear in the repo or the browser bundle.
+These never appear in the repo or the browser bundle. Names are case-sensitive
+and read literally, so a typo shows up as "missing", not "wrong".
+
+`R2_ACCOUNT_ID` is the bare account ID. The function builds
+`https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com` itself, so pasting the full
+endpoint URL produces a doubled scheme and a DNS failure that looks nothing
+like a config error.
+
+`MAPBOX_TOKEN` must **not** be the browser token from `VITE_MAPBOX_TOKEN`. That
+one is URL-restricted, and Mapbox enforces those restrictions via the `Referer`
+header — which a server-side fetch never sends, so it 403s every time. See
+[MAPS.md](MAPS.md#3-static-card-thumbnails-optional-needs-r2).
 
 ### 6. Deploy the function ✅ done
 The `media` function is deployed. It runs with **`verify_jwt` off on purpose**:
