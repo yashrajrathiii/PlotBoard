@@ -46,8 +46,48 @@ needs reading comprehension, not pattern matching.
 ### Why keep the rules
 
 They are the offline floor and the regression suite. `npm run test:parser`
-pins 19 cases — 14 for the rules, 5 for the merge — and runs with no network
+pins 25 cases — 18 for the rules, 7 for the merge — and runs with no network
 and no key.
+
+---
+
+## What it extracts
+
+Address (locality/road), city, state, pincode, property type, area + unit,
+rate + unit, frontage + unit, contact type, status, and whatever is genuinely
+left over as notes.
+
+Two of those carry rules worth knowing.
+
+### Area units
+
+Only `sqft` and `acre` are stored, so everything else is converted:
+
+| Written | Becomes |
+| --- | --- |
+| gaj / gaz / sq yard | × 9 sqft |
+| decimal / dismil | × 435.6 sqft |
+| guntha | × 1089 sqft |
+| hectare | × 2.4711 **acre** |
+| acer / ekad / ekar | acre (common misspellings) |
+
+A rate quoted per gaj is divided by 9 so it lands as ₹/sqft — keeping the deal
+value identical either way. "200 gaj @ ₹1800/gaj" and "1800 sqft @ ₹200/sqft"
+both come out as ₹3,60,000.
+
+### Contact type — checked most-specific-first
+
+| Value | Meaning | Signals |
+| --- | --- | --- |
+| `Owner` | the contact owns it | "owner", "malik", "maalik" |
+| `Direct` | exactly one broker in between | "direct", with no owner word |
+| `Broker` | a longer chain | "broker", "agent", "dalal" |
+
+**An owner claim beats a "direct" claim.** A broker writing "owner direct" is
+saying the owner is reachable — not that there is one broker in the chain — so
+that phrase resolves to `Owner`, not `Direct`. Bare "direct" with no owner word
+is the middle case. This precedence is pinned by four tests, because getting it
+backwards silently mislabels how close a lead actually is.
 
 ---
 
