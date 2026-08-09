@@ -118,6 +118,10 @@ Administrator role.)
   scoped to specific buckets, and it is all the function needs. Admin tokens
   could create and delete buckets, which it never does.
 - Scope: only the `plotboard-media` bucket.
+- **Leave "Client IP Address Filtering" empty.** Supabase Edge Functions egress
+  from rotating IPs, so an allowlist would let some uploads through and fail
+  others at random — a bug that looks like flaky networking, not config.
+- Account tokens have no expiry; they stay valid until manually revoked.
 
 Copy `Access Key ID` and `Secret Access Key` now — **the secret is never shown
 again**. The `Account ID` is on the R2 overview page (and in the dashboard URL).
@@ -139,7 +143,16 @@ propagate, so if the first upload fails, wait and retry before debugging:
 ]
 ```
 
-Without this, browser uploads fail even with a valid presigned URL.
+Without this, browser uploads fail even with a valid presigned URL — the
+browser blocks the PUT before it ever leaves the machine, so R2 logs show
+nothing at all.
+
+Origins must be an exact scheme + host + port with **no trailing slash and no
+path**. `https://plot-board-zeta.vercel.app/` (trailing slash) does not match.
+
+Note that Vercel **preview deployments** get their own generated hostnames, so
+uploads only work from `localhost` and the production domain unless you add
+those too.
 
 ### 4. Apply migration 009 ✅ done
 `supabase/migrations/009_media_storage_provider.sql` is applied. It adds
