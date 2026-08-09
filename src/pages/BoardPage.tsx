@@ -36,12 +36,17 @@ export default function BoardPage() {
               <Share2 size={16} /> <span className="hidden sm:inline">Share</span>
             </button>
           )}
+          {/* Icon-only on mobile, matching the Share button above. Importing a
+              pasted WhatsApp message is *more* useful on a phone than on
+              desktop — that is where the message arrives — so this must not be
+              desktop-only. */}
           <Link
             to="/import"
+            aria-label="Import from WhatsApp"
             title="Paste a WhatsApp message to pre-fill a listing"
-            className="hidden sm:flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg px-3 py-2"
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg px-3 py-2"
           >
-            <ClipboardPaste size={16} /> Import
+            <ClipboardPaste size={16} /> <span className="hidden sm:inline">Import</span>
           </Link>
           {/* Desktop add button; mobile uses the floating button below */}
           <Link

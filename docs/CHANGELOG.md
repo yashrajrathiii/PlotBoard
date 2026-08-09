@@ -10,6 +10,21 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-10 (later)
+
+**The Import button was invisible on every phone.**
+
+- `BoardPage.tsx` styled it `hidden sm:flex`, so it disappeared below 640px —
+  on all phones. The `/import` route existed and worked; nothing linked to it.
+  Reinstalling the PWA could never have revealed it, which is worth stating
+  plainly because that is what was tried.
+- It now follows the pattern the Share button beside it already used: always
+  rendered, label hidden below `sm`, with an `aria-label` so the icon-only form
+  stays accessible.
+- This was the wrong way round to begin with. Importing a pasted WhatsApp
+  message is *more* useful on a phone than on a desktop — the phone is where
+  the message arrives.
+
 ## 2026-08-10
 
 **Cloudflare R2 is live — uploads, reads, deletes and cached thumbnails all
