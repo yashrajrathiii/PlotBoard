@@ -33,16 +33,37 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-const ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID")!;
-const BUCKET = Deno.env.get("R2_BUCKET")!;
+const R2_VARS = {
+  R2_ACCOUNT_ID: Deno.env.get("R2_ACCOUNT_ID"),
+  R2_BUCKET: Deno.env.get("R2_BUCKET"),
+  R2_ACCESS_KEY_ID: Deno.env.get("R2_ACCESS_KEY_ID"),
+  R2_SECRET_ACCESS_KEY: Deno.env.get("R2_SECRET_ACCESS_KEY"),
+};
+/** Names of any R2 secret not set yet — reported verbatim so setup is fixable. */
+const R2_MISSING = Object.entries(R2_VARS)
+  .filter(([, v]) => !v)
+  .map(([k]) => k);
+const r2Ready = R2_MISSING.length === 0;
+
+const ACCOUNT_ID = R2_VARS.R2_ACCOUNT_ID ?? "";
+const BUCKET = R2_VARS.R2_BUCKET ?? "";
 const R2_ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
-const r2 = new AwsClient({
-  accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
-  secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
-  service: "s3",
-  region: "auto",
-});
+/**
+ * Built on first use, not at module load. Constructing a signer with undefined
+ * credentials risks throwing during import, which would take down *every*
+ * action — including `cleanup-sold`, whose Supabase half needs no R2 at all.
+ */
+let _r2: AwsClient | null = null;
+function r2Client(): AwsClient {
+  _r2 ??= new AwsClient({
+    accessKeyId: R2_VARS.R2_ACCESS_KEY_ID!,
+    secretAccessKey: R2_VARS.R2_SECRET_ACCESS_KEY!,
+    service: "s3",
+    region: "auto",
+  });
+  return _r2;
+}
 
 const objectUrl = (path: string) =>
   `${R2_ENDPOINT}/${BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
@@ -55,7 +76,7 @@ const objectUrl = (path: string) =>
 async function presign(path: string, method: "GET" | "PUT", expiresIn: number) {
   const url = new URL(objectUrl(path));
   url.searchParams.set("X-Amz-Expires", String(expiresIn));
-  const signed = await r2.sign(url.toString(), { method, signQuery: true });
+  const signed = await r2Client().sign(url.toString(), { method, signQuery: true });
   return signed.url;
 }
 
@@ -69,6 +90,22 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json().catch(() => ({}));
     const action = body.action;
+
+    // Every action below except `cleanup-sold` presigns or writes to R2. The
+    // usual setup mistake is flipping VITE_MEDIA_PROVIDER=r2 before adding the
+    // secrets, which would otherwise surface to the broker as an opaque
+    // signing failure mid-upload. Name the missing variables instead.
+    if (!r2Ready && action !== "cleanup-sold") {
+      return json(
+        {
+          error:
+            `Cloudflare R2 is not configured yet — missing ${R2_MISSING.join(", ")} ` +
+            `in the Edge Function secrets. Until then set VITE_MEDIA_PROVIDER=supabase.`,
+          code: "not_configured",
+        },
+        503,
+      );
+    }
 
     // ---------- scheduled sweep (no user session) ----------
     if (action === "cleanup-sold") {
@@ -97,7 +134,13 @@ Deno.serve(async (req: Request) => {
       for (const row of doomed) {
         try {
           if (row.storage_provider === "r2") {
-            const res = await r2.fetch(objectUrl(row.storage_path), { method: "DELETE" });
+            // The Supabase half of the sweep still runs without R2 configured;
+            // only the R2 objects have to wait.
+            if (!r2Ready) {
+              failures.push(`${row.storage_path}: R2 not configured`);
+              continue;
+            }
+            const res = await r2Client().fetch(objectUrl(row.storage_path), { method: "DELETE" });
             // R2 returns 204 on delete; 404 means it's already gone (fine).
             if (!res.ok && res.status !== 404) {
               failures.push(`${row.storage_path}: HTTP ${res.status}`);
@@ -212,7 +255,7 @@ Deno.serve(async (req: Request) => {
       }
       const bytes = new Uint8Array(await res.arrayBuffer());
       const path = `${listingId}/map-${crypto.randomUUID()}.png`;
-      const put = await r2.fetch(objectUrl(path), {
+      const put = await r2Client().fetch(objectUrl(path), {
         method: "PUT",
         body: bytes,
         headers: { "Content-Type": "image/png" },
@@ -235,7 +278,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", listingId);
       if (updateError) return json({ error: updateError.message }, 500);
       if (prev?.static_map_path && prev.static_map_path !== path) {
-        await r2.fetch(objectUrl(prev.static_map_path), { method: "DELETE" });
+        await r2Client().fetch(objectUrl(prev.static_map_path), { method: "DELETE" });
       }
 
       return json({ ok: true, path });
@@ -256,7 +299,7 @@ Deno.serve(async (req: Request) => {
 
       let deleted = 0;
       for (const row of owned ?? []) {
-        const res = await r2.fetch(objectUrl(row.storage_path), { method: "DELETE" });
+        const res = await r2Client().fetch(objectUrl(row.storage_path), { method: "DELETE" });
         if (res.ok || res.status === 404) deleted++;
       }
       return json({ ok: true, deleted });

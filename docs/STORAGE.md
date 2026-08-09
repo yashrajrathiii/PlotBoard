@@ -88,6 +88,13 @@ Two practical notes:
 
 ## One-time setup
 
+**Already done** (2026-08-05): migration 009 is applied and the `media` Edge
+Function is deployed. Steps 4 and 6 below are marked ✅ and need no action.
+
+Until the secrets in step 5 exist, every R2 action returns a 503 naming the
+variables that are missing, rather than failing with an opaque signing error —
+so getting the order wrong is recoverable, not confusing.
+
 ### 1. Create the bucket
 Cloudflare dashboard → **R2** → *Create bucket* → name it `plotboard-media`.
 Location: **Automatic** (or APAC for India). Add a payment method if prompted.
@@ -117,10 +124,11 @@ Bucket → **Settings → CORS policy** → paste (swap in your real Vercel doma
 
 Without this, browser uploads fail even with a valid presigned URL.
 
-### 4. Apply migration 009
-Run `supabase/migrations/009_media_storage_provider.sql` in the Supabase SQL
-editor. **Do this before deploying the frontend** (the app tolerates either
-order, but the new column is what routes files to R2).
+### 4. Apply migration 009 ✅ done
+`supabase/migrations/009_media_storage_provider.sql` is applied. It adds
+`listing_media.storage_provider` — the column that routes each file to the
+right store. Existing rows were all stamped `'supabase'`, so legacy files keep
+loading untouched.
 
 ### 5. Set the Edge Function secrets
 Supabase → **Edge Functions → Secrets**:
@@ -135,11 +143,17 @@ CLEANUP_SECRET       = <any long random string you generate>
 
 These never appear in the repo or the browser bundle.
 
-### 6. Deploy the function
+### 6. Deploy the function ✅ done
+The `media` function is deployed. It runs with **`verify_jwt` off on purpose**:
+`cleanup-sold` is invoked by pg_cron with a shared secret rather than a user
+session, so the platform-level JWT gate would block it. The function
+authenticates itself instead — a member's JWT for every user action (401
+otherwise), and `CLEANUP_SECRET` for the sweep (403 otherwise).
+
+To redeploy after changes:
 ```bash
-supabase functions deploy media
+supabase functions deploy media --no-verify-jwt
 ```
-Or paste `supabase/functions/media/index.ts` into the dashboard editor.
 
 ### 7. Flip new uploads to R2
 Set the env var in **both** places:

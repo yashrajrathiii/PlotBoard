@@ -12,6 +12,31 @@ session, with bullets for what shipped and *why* where it matters.
 
 ## 2026-08-05
 
+**Cloudflare R2 groundwork — migration 009 applied, `media` function deployed.**
+
+- **Migration 009 had never actually been applied.** The migration history
+  showed 008, 009 and 010 all missing, but checking the real schema found only
+  `listing_media.storage_provider` absent — 008 and 010 had been run through the
+  SQL editor, which doesn't record history. Nobody noticed because
+  `LISTING_SELECT` uses `listing_media(*)` rather than naming columns, so the
+  board kept working without it. That column is what routes a file to R2, so R2
+  could never have worked. Now applied; the 3 existing media rows are stamped
+  `'supabase'` and keep loading untouched.
+- **The `media` Edge Function is deployed** with `verify_jwt` off, deliberately:
+  `cleanup-sold` is invoked by pg_cron with a shared secret rather than a user
+  session, so the platform JWT gate would block it. The function authenticates
+  itself — a member's JWT for user actions, `CLEANUP_SECRET` for the sweep.
+- **R2 config is now checked, not assumed.** The signer was built at module
+  scope from `Deno.env.get(...)!`, so missing secrets meant an opaque signing
+  failure mid-upload — or possibly a module-load crash taking down every action
+  including the Supabase half of the sweep. The client is now built lazily, and
+  any action needing R2 returns a 503 **naming the missing variables**. The
+  likely setup mistake is flipping `VITE_MEDIA_PROVIDER=r2` before adding the
+  secrets; that now says so in plain words instead of failing cryptically.
+  Verified against the deployed function: `upload-url` and `read-urls` return
+  the named 503, and `cleanup-sold` still returns a clean 403 rather than
+  crashing.
+
 **Contact type is now three-way: Broker / Direct / Owner.**
 
 - Migration `012_contact_type_three_way.sql` (applied). The listing now records
