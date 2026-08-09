@@ -95,20 +95,37 @@ Until the secrets in step 5 exist, every R2 action returns a 503 naming the
 variables that are missing, rather than failing with an opaque signing error —
 so getting the order wrong is recoverable, not confusing.
 
-### 1. Create the bucket
-Cloudflare dashboard → **R2** → *Create bucket* → name it `plotboard-media`.
-Location: **Automatic** (or APAC for India). Add a payment method if prompted.
+### 1. Enable R2 and create the bucket
+Cloudflare dashboard → **Storage & databases → R2 → Overview**. First time
+only, complete the **checkout flow to add an R2 subscription** — a payment
+method is required even for the free tier, and you are not charged under 10 GB.
+
+Then *Create bucket* → name it `plotboard-media`. Bucket names allow only
+lowercase letters, digits and hyphens, may not start or end with a hyphen, and
+must be 3–63 characters. Location: **APAC** for India (or Automatic).
 
 ### 2. Create an API token
-R2 → **Manage R2 API Tokens** → *Create API token*:
-- Permission: **Object Read & Write**
-- Scope: only the `plotboard-media` bucket
+R2 → under **Account Details**, select **Manage** next to **API Tokens** →
+*Create API token*.
 
-Copy the three values — they're shown once:
-`Account ID`, `Access Key ID`, `Secret Access Key`.
+Choose **Create Account API token**, not a User API token. A User token
+inherits one person's permissions and stops working if their role changes or
+they leave the account; an Account token belongs to the account itself, which
+is what a server-side integration needs. (Creating one requires the Super
+Administrator role.)
+
+- Permission: **Object Read & Write** — this is the only level that can be
+  scoped to specific buckets, and it is all the function needs. Admin tokens
+  could create and delete buckets, which it never does.
+- Scope: only the `plotboard-media` bucket.
+
+Copy `Access Key ID` and `Secret Access Key` now — **the secret is never shown
+again**. The `Account ID` is on the R2 overview page (and in the dashboard URL).
 
 ### 3. Add the CORS policy
-Bucket → **Settings → CORS policy** → paste (swap in your real Vercel domain):
+Bucket → **Settings → CORS Policy → Add CORS policy → JSON** tab, and paste
+(swap in your real Vercel domain). Rule changes can take up to 30 seconds to
+propagate, so if the first upload fails, wait and retry before debugging:
 
 ```json
 [
