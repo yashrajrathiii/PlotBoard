@@ -234,6 +234,37 @@ To change the retention window later, edit `retentionDays` here and
 
 ---
 
+## Troubleshooting uploads
+
+**A browser "CORS" error on upload usually is not CORS.**
+
+R2 rejects a bad presigned request with `401 Unauthorized`, and error responses
+carry no `Access-Control-Allow-Origin` header — so the browser reports the
+missing header rather than the real status:
+
+```
+blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present
+```
+
+Diagnose in this order, because each step rules out a whole class of cause:
+
+1. **Check the preflight**, which needs no credentials. If this returns
+   `Access-Control-Allow-Origin`, CORS is fine and the problem is elsewhere:
+   ```bash
+   curl -i -X OPTIONS "https://<ACCOUNT_ID>.r2.cloudflarestorage.com/<BUCKET>/probe" -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: PUT"
+   ```
+2. **Call the `static-map` action.** It fetches from Mapbox and then PUTs to R2
+   *server-side*, where CORS does not apply. `Could not store thumbnail (HTTP
+   401)` isolates the failure to the R2 credentials; a Mapbox error isolates it
+   to `MAPBOX_TOKEN`.
+3. **Check the Access Key ID is 32 hexadecimal characters** (`0-9`, `a-f`). A
+   letter outside that range — `l` for `1`, `o` for `0` — means the value was
+   transcribed by hand rather than pasted. This has already happened once.
+
+Note that a 200 from `upload-url` proves nothing about credential validity: it
+signs the URL locally and never contacts R2, so an invalid key still returns a
+perfectly well-formed URL that fails only when used.
+
 ## How the hybrid works
 
 Every `listing_media` row carries `storage_provider`:
