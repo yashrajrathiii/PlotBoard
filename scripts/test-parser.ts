@@ -263,6 +263,38 @@ const coordCases: { label: string; text: string; expect: typeof RAIPUR | null }[
     expect: RAIPUR,
   },
   { label: 'coords: integers only', text: '21, 81', expect: { lat: 21, lng: 81 } },
+  // DMS — what Google Maps puts in the search box when you copy coordinates.
+  // 21 + 18/60 + 11.2/3600 = 21.303111 ; 81 + 35/60 + 3.3/3600 = 81.584250
+  {
+    label: 'coords: DMS as Google Maps writes it',
+    text: `21°18'11.2"N 81°35'03.3"E`,
+    expect: { lat: 21.3031111, lng: 81.58425 },
+  },
+  {
+    label: 'coords: DMS with a comma separator',
+    text: `21°18'11.2"N, 81°35'03.3"E`,
+    expect: { lat: 21.3031111, lng: 81.58425 },
+  },
+  {
+    label: 'coords: DMS with curly primes and spaces',
+    text: `21° 18′ 11.2″ N  81° 35′ 03.3″ E`,
+    expect: { lat: 21.3031111, lng: 81.58425 },
+  },
+  {
+    label: 'coords: DMS southern/western hemisphere is negated',
+    text: `21°18'11.2"S 81°35'03.3"W`,
+    expect: { lat: -21.3031111, lng: -81.58425 },
+  },
+  {
+    label: 'coords: degrees + decimal minutes (no seconds)',
+    text: `21°18.1867'N 81°35.055'E`,
+    expect: { lat: 21.3031111, lng: 81.58425 },
+  },
+  {
+    label: 'coords: DMS pasted longitude-first still maps correctly',
+    text: `81°35'03.3"E 21°18'11.2"N`,
+    expect: { lat: 21.3031111, lng: 81.58425 },
+  },
   // Rejections — each of these previously produced a wrong pin or a crash.
   { label: 'coords: rejects a short link (no coords in it)', text: 'https://maps.app.goo.gl/AbC123', expect: null },
   { label: 'coords: rejects plain prose', text: 'Kachna main road, Raipur', expect: null },

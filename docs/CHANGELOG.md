@@ -66,7 +66,19 @@ satisfy), redirects followed **one hop at a time with the allowlist re-checked
 at each**, a signed-in caller, a 2 KB URL cap, 5-redirect and 8-second limits.
 Verified rejecting the lookalike host, a foreign host, and `file://`.
 
-Tests: 44 passing (16 new coordinate cases + 3 short-link detection).
+- **DMS is now accepted** — `21°18'11.2"N 81°35'03.3"E`. This is what Google
+  Maps puts in its *search box* when you copy coordinates, so it is a very
+  common paste, and the decimal-degree pattern could not match it. Also covers
+  degrees + decimal minutes (`21°18.1867'N`, seconds omitted), curly primes
+  (`′ ″`) as well as straight quotes, comma or space separators, S/W negation,
+  and a longitude-first paste. DMS is matched **before** the bare-pair rule:
+  `21°18'11.2"N 81°35'03.3"E` contains digit pairs that the loose pattern would
+  otherwise read as a decimal coordinate, dropping the pin ~30 km away.
+- `parseCoords` was restructured so each pattern carries **its own converter**
+  rather than the caller inferring meaning from `match.length` — that was
+  already fragile with two shapes and would not survive DMS's eight groups.
+
+Tests: 50 passing (22 new coordinate cases + 3 short-link detection).
 
 ## 2026-08-10 (later)
 

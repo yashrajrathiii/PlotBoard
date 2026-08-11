@@ -45,54 +45,95 @@ const LNG = String.raw`-?\d{1,3}(?:\.\d+)?`
  * fallback, because a Maps URL also contains loose number pairs (zoom levels,
  * `data=` ids) that the loose pattern would happily mis-read.
  */
+/**
+ * One sexagesimal component, covering every punctuation variant seen in the
+ * wild: `21°18'11.2"N`, `21° 18′ 11.2″ N`, `21°18.187'N` (degrees + decimal
+ * minutes, seconds omitted). Straight and curly quotes both appear depending on
+ * whether the value was copied from Google Maps, a keyboard, or a WhatsApp
+ * message that mangled it.
+ */
+const DMS_PART =
+  String.raw`(\d{1,3})\s*°\s*(\d{1,2}(?:\.\d+)?)\s*['’′]?\s*(?:(\d{1,2}(?:\.\d+)?)\s*(?:["”″]|'')?)?\s*([NSEW])`
+
+/** deg + min/60 + sec/3600, negated for the southern/western hemispheres. */
+function dmsToDecimal(deg: string, min: string, sec: string | undefined, hemi: string): number {
+  const value = Number(deg) + Number(min) / 60 + (sec ? Number(sec) / 3600 : 0)
+  return /[SW]/i.test(hemi) ? -value : value
+}
+
+/**
+ * Each entry owns its own conversion, rather than the caller guessing from
+ * capture-group positions — the DMS forms have eight groups and the URL forms
+ * two, and inferring which is which from `match.length` was already fragile
+ * before DMS existed.
+ */
+interface CoordPattern {
+  re: RegExp
+  convert: (m: RegExpMatchArray) => { lat: number; lng: number }
+}
+
+/** The common case: group 1 is latitude, group 2 is longitude. */
+const pair = (re: RegExp): CoordPattern => ({
+  re,
+  convert: (m) => ({ lat: parseFloat(m[1]), lng: parseFloat(m[2]) }),
+})
+
+const COORD_PATTERNS: CoordPattern[] = [
+  // ---- DMS / DM first ------------------------------------------------------
+  // Must precede the bare-pair pattern: "21°18'11.2\"N 81°35'03.3\"E" contains
+  // digit pairs that the loose pattern would otherwise mis-read as a decimal
+  // coordinate, silently dropping the pin ~30 km away.
+  {
+    re: new RegExp(DMS_PART + String.raw`\s*[, ]\s*` + DMS_PART, 'i'),
+    convert: (m) => {
+      const a = { v: dmsToDecimal(m[1], m[2], m[3], m[4]), hemi: m[4] }
+      const b = { v: dmsToDecimal(m[5], m[6], m[7], m[8]), hemi: m[8] }
+      // Latitude is whichever component carries N or S — Google writes lat
+      // first, but people do paste them the other way round.
+      const latFirst = /[NS]/i.test(a.hemi)
+      return latFirst ? { lat: a.v, lng: b.v } : { lat: b.v, lng: a.v }
+    },
+  },
+
+  // ---- explicit URL parameters, most specific first ------------------------
+  // The official Maps URL format: ?api=1&query=lat,lng
+  pair(new RegExp(String.raw`[?&](?:query|q|ll|center|daddr|saddr|destination)=(${LAT}),\s*(${LNG})`, 'i')),
+  // "/@lat,lng,15z"
+  pair(new RegExp(String.raw`@(${LAT}),(${LNG})`)),
+  // "/place/21.2514,81.6296" and "/dir//21.25,81.63"
+  pair(new RegExp(String.raw`/(?:place|dir)/(?:[^/]*/)?(${LAT}),(${LNG})`, 'i')),
+  // The `data=` segment carries the authoritative pin as !3d<lat>!4d<lng>.
+  pair(new RegExp(String.raw`!3d(${LAT})!4d(${LNG})`)),
+  // geo: URI (Android intent links)
+  pair(new RegExp(String.raw`geo:(${LAT}),(${LNG})`, 'i')),
+
+  // ---- human-typed decimal forms -------------------------------------------
+  // "21.2514° N, 81.6296° E"
+  {
+    re: new RegExp(
+      String.raw`(\d{1,3}(?:\.\d+)?)\s*°\s*([NSEW])\s*[, ]\s*(\d{1,3}(?:\.\d+)?)\s*°\s*([NSEW])`,
+      'i',
+    ),
+    convert: (m) => {
+      const aVal = parseFloat(m[1]) * (/[SW]/i.test(m[2]) ? -1 : 1)
+      const bVal = parseFloat(m[3]) * (/[SW]/i.test(m[4]) ? -1 : 1)
+      return /[NS]/i.test(m[2]) ? { lat: aVal, lng: bVal } : { lat: bVal, lng: aVal }
+    },
+  },
+  // Bare pair, anywhere in the text: "Plot 42 — 21.2514, 81.6296".
+  // Comma-separated only; a bare space-separated pair matches far too much
+  // ordinary text (an area followed by a rate, for instance).
+  pair(new RegExp(String.raw`(?:^|[^\d.-])(${LAT})\s*,\s*(${LNG})(?:$|[^\d.])`)),
+]
+
 export function parseCoords(input: string): LatLng | null {
   const text = input.trim()
   if (!text) return null
 
-  const patterns: RegExp[] = [
-    // ---- explicit URL parameters, most specific first ----------------------
-    // The official Maps URL format: ?api=1&query=lat,lng
-    new RegExp(String.raw`[?&](?:query|q|ll|center|daddr|saddr|destination)=(${LAT}),\s*(${LNG})`, 'i'),
-    // "/@lat,lng,15z"
-    new RegExp(String.raw`@(${LAT}),(${LNG})`),
-    // "/place/21.2514,81.6296" and "/dir//21.25,81.63"
-    new RegExp(String.raw`/(?:place|dir)/(?:[^/]*/)?(${LAT}),(${LNG})`, 'i'),
-    // The `data=` segment carries the authoritative pin as !3d<lat>!4d<lng>.
-    new RegExp(String.raw`!3d(${LAT})!4d(${LNG})`),
-    // geo: URI (Android intent links)
-    new RegExp(String.raw`geo:(${LAT}),(${LNG})`, 'i'),
-
-    // ---- human-typed forms -------------------------------------------------
-    // "21.2514° N, 81.6296° E" — degree symbol and hemisphere letters.
-    new RegExp(
-      String.raw`(\d{1,2}(?:\.\d+)?)\s*°?\s*([NS])\s*[, ]\s*(\d{1,3}(?:\.\d+)?)\s*°?\s*([EW])`,
-      'i',
-    ),
-    // Bare pair, anywhere in the text: "Plot 42 — 21.2514, 81.6296".
-    // Comma-separated only; a bare space-separated pair matches far too much
-    // ordinary text (an area followed by a rate, for instance).
-    new RegExp(String.raw`(?:^|[^\d.-])(${LAT})\s*,\s*(${LNG})(?:$|[^\d.])`),
-  ]
-
-  for (const re of patterns) {
+  for (const { re, convert } of COORD_PATTERNS) {
     const m = text.match(re)
     if (!m) continue
-
-    let lat: number
-    let lng: number
-    if (m.length === 5) {
-      // The hemisphere form: letters decide the sign, and N/S may come second.
-      const [, aVal, aDir, bVal, bDir] = m
-      const north = aDir.toUpperCase() === 'N' || aDir.toUpperCase() === 'S'
-      lat = parseFloat(north ? aVal : bVal)
-      lng = parseFloat(north ? bVal : aVal)
-      if (/S/i.test(north ? aDir : bDir)) lat = -lat
-      if (/W/i.test(north ? bDir : aDir)) lng = -lng
-    } else {
-      lat = parseFloat(m[1])
-      lng = parseFloat(m[2])
-    }
-
+    const { lat, lng } = convert(m)
     // A plausible pair only. Without this a zoom level or a price sneaks
     // through as a "coordinate" and silently drops the pin in the sea.
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
