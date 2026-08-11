@@ -3,6 +3,7 @@ import {
   ruleBasedParser,
   type ListingDraft,
 } from '../src/lib/listingParser'
+import { isShortMapsLink, parseCoords } from '../src/lib/geo'
 
 const samples: { label: string; text: string; expect: Record<string, unknown> }[] = [
   {
@@ -215,6 +216,90 @@ for (const c of mergeCases) {
     console.log(`FAIL  ${c.label}`)
     misses.forEach((m) => console.log(`        ${m}`))
     console.log(`        merged: ${JSON.stringify(merged.fields)}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// parseCoords — every format below is one a broker actually pasted into the
+// location box. Pinned here because a silent null is invisible in the UI.
+// ---------------------------------------------------------------------------
+
+const RAIPUR = { lat: 21.2514, lng: 81.6296 }
+
+const coordCases: { label: string; text: string; expect: typeof RAIPUR | null }[] = [
+  { label: 'coords: plain "lat, lng"', text: '21.2514, 81.6296', expect: RAIPUR },
+  { label: 'coords: no space', text: '21.2514,81.6296', expect: RAIPUR },
+  {
+    label: 'coords: desktop URL with /@lat,lng,zoom',
+    text: 'https://www.google.com/maps/place/Gudhiyari/@21.2514,81.6296,15z/data=!3m1',
+    expect: RAIPUR,
+  },
+  {
+    label: 'coords: official ?api=1&query= format',
+    text: 'https://www.google.com/maps/search/?api=1&query=21.2514,81.6296',
+    expect: RAIPUR,
+  },
+  { label: 'coords: ?q=', text: 'https://www.google.com/maps?q=21.2514,81.6296', expect: RAIPUR },
+  { label: 'coords: &ll=', text: 'https://maps.google.com/?ll=21.2514,81.6296&z=17', expect: RAIPUR },
+  {
+    label: 'coords: !3d..!4d.. inside the data= segment',
+    text: 'https://www.google.com/maps/place/X/data=!4m6!3m5!1s0x0!3d21.2514!4d81.6296!16s',
+    expect: RAIPUR,
+  },
+  {
+    label: 'coords: /place/lat,lng',
+    text: 'https://www.google.com/maps/place/21.2514,81.6296',
+    expect: RAIPUR,
+  },
+  { label: 'coords: geo: URI', text: 'geo:21.2514,81.6296', expect: RAIPUR },
+  {
+    label: 'coords: degree + hemisphere (what Maps shows on long-press)',
+    text: '21.2514° N, 81.6296° E',
+    expect: RAIPUR,
+  },
+  {
+    label: 'coords: embedded in a sentence',
+    text: 'Plot 42 near water tank — 21.2514, 81.6296 , ask for Ramesh',
+    expect: RAIPUR,
+  },
+  { label: 'coords: integers only', text: '21, 81', expect: { lat: 21, lng: 81 } },
+  // Rejections — each of these previously produced a wrong pin or a crash.
+  { label: 'coords: rejects a short link (no coords in it)', text: 'https://maps.app.goo.gl/AbC123', expect: null },
+  { label: 'coords: rejects plain prose', text: 'Kachna main road, Raipur', expect: null },
+  { label: 'coords: rejects out-of-range latitude', text: '210.5, 81.6', expect: null },
+  { label: 'coords: rejects empty', text: '   ', expect: null },
+]
+
+for (const c of coordCases) {
+  const got = parseCoords(c.text)
+  const ok =
+    c.expect === null
+      ? got === null
+      : got !== null &&
+        Math.abs(got.lat - c.expect.lat) < 1e-6 &&
+        Math.abs(got.lng - c.expect.lng) < 1e-6
+  if (ok) {
+    pass++
+    console.log(`PASS  ${c.label}`)
+  } else {
+    fail++
+    console.log(`FAIL  ${c.label}`)
+    console.log(`        expected ${JSON.stringify(c.expect)}, got ${JSON.stringify(got)}`)
+  }
+}
+
+for (const [text, want] of [
+  ['https://maps.app.goo.gl/AbC123', true],
+  ['https://goo.gl/maps/AbC123', true],
+  ['https://www.google.com/maps?q=21.25,81.63', false],
+] as const) {
+  const got = isShortMapsLink(text)
+  if (got === want) {
+    pass++
+    console.log(`PASS  shortlink: ${text.slice(0, 40)} -> ${want}`)
+  } else {
+    fail++
+    console.log(`FAIL  shortlink: ${text} expected ${want}, got ${got}`)
   }
 }
 

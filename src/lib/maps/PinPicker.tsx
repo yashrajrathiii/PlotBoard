@@ -10,7 +10,8 @@ import {
 import { Crosshair, Search } from 'lucide-react'
 import { GOOGLE_MAPS_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, PIN_ZOOM, hasGoogleMaps } from './config'
 import MapPlaceholder from './MapPlaceholder'
-import { parseCoords, withinIndia, type LatLng } from '../geo'
+import { isShortMapsLink, parseCoords, withinIndia, type LatLng } from '../geo'
+import { resolveShortLink } from './resolveShortLink'
 import { reverseGeocode, type PlaceAddress } from './reverseGeocode'
 
 /**
@@ -37,19 +38,53 @@ export default function PinPicker({
   onAddress?: (a: PlaceAddress) => void
   className?: string
 }) {
-  if (!hasGoogleMaps()) {
-    return (
-      <MapPlaceholder
-        className={`${className} rounded-xl border border-gray-200`}
-        message="Pin picker unavailable"
-        detail="VITE_GOOGLE_MAPS_KEY is not set. You can still paste coordinates below."
-      />
-    )
-  }
-  return (
+  // No key: the map itself is impossible, but pasting a link or coordinates is
+  // not — and that is the whole job. This branch used to promise "you can still
+  // paste coordinates below" while rendering no input at all, which left a
+  // broker with no way to set a pin whatsoever if the key ever lapsed.
+  return hasGoogleMaps() ? (
     <APIProvider apiKey={GOOGLE_MAPS_KEY!}>
       <PickerInner value={value} onChange={onChange} onAddress={onAddress} className={className} />
     </APIProvider>
+  ) : (
+    <KeylessPicker value={value} onChange={onChange} className={className} />
+  )
+}
+
+/** Manual-entry fallback used when there is no Google Maps key. */
+function KeylessPicker({
+  value,
+  onChange,
+  className,
+}: {
+  value: LatLng | null
+  onChange: (p: LatLng) => void
+  className: string
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const pick = (p: LatLng) => {
+    if (!withinIndia(p)) {
+      setError('That location is outside India — please check the coordinates.')
+      return
+    }
+    setError(null)
+    onChange(p)
+  }
+  return (
+    <div className="space-y-2">
+      <LocationInput onPick={pick} onError={setError} />
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <MapPlaceholder
+        className={`${className} rounded-xl border border-gray-200`}
+        message="Map unavailable"
+        detail="VITE_GOOGLE_MAPS_KEY is not set — paste a Google Maps link or coordinates above."
+      />
+      {value && (
+        <p className="text-xs text-gray-500">
+          Pin: {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -154,8 +189,12 @@ function Recenter({ target }: { target: LatLng | null }) {
 }
 
 /**
- * Places Autocomplete, with a free local shortcut: if the text is already a
- * coordinate pair or a Google Maps URL, resolve it without an API call.
+ * Google Places type-ahead layered ON TOP of the plain input.
+ *
+ * The split is deliberate: `LocationInput` below knows nothing about Google, so
+ * pasting a link or coordinates keeps working even when Places is unavailable —
+ * which it may well be, since the legacy Autocomplete widget is deprecated for
+ * Google Cloud projects created after 1 Mar 2025.
  */
 function SearchBar({
   onPick,
@@ -166,33 +205,91 @@ function SearchBar({
 }) {
   const places = useMapsLibrary('places')
   const inputRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (!places || !inputRef.current) return
-    const ac = new places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: 'in' },
-      fields: ['geometry'],
-    })
-    const listener = ac.addListener('place_changed', () => {
-      const loc = ac.getPlace()?.geometry?.location
-      if (loc) onPick({ lat: loc.lat(), lng: loc.lng() })
-    })
-    return () => listener.remove()
+    // Guarded on purpose. There is no error boundary in this app — an
+    // unhandled throw here unmounts the entire React root and the broker sees
+    // a white screen mid-listing. Losing the type-ahead is survivable; losing
+    // the app is not.
+    let listener: google.maps.MapsEventListener | undefined
+    try {
+      const ac = new places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'in' },
+        fields: ['geometry'],
+      })
+      listener = ac.addListener('place_changed', () => {
+        const loc = ac.getPlace()?.geometry?.location
+        if (loc) onPick({ lat: loc.lat(), lng: loc.lng() })
+      })
+    } catch (e) {
+      console.warn('[LD Board] Places autocomplete unavailable:', e)
+    }
+    return () => listener?.remove()
   }, [places, onPick])
 
-  const handleManual = () => {
-    const parsed = parseCoords(query)
+  return <LocationInput ref={inputRef} onPick={onPick} onError={onError} />
+}
+
+/**
+ * The input, the Go button and "use my location" — with no dependency on
+ * Google whatsoever.
+ */
+function LocationInput({
+  onPick,
+  onError,
+  ref,
+}: {
+  onPick: (p: LatLng) => void
+  onError: (msg: string | null) => void
+  ref?: React.Ref<HTMLInputElement>
+}) {
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  /** Shared by the Go button, Enter, and paste. */
+  const resolve = async (text: string) => {
+    const parsed = parseCoords(text)
     if (parsed) {
+      onError(null)
       onPick(parsed)
       setQuery('')
-      return
+      return true
     }
-    if (/goo\.gl|maps\.app/.test(query)) {
-      onError(
-        'Short Google Maps links don’t carry coordinates. Long-press the plot in Google Maps and copy the "lat, lng" numbers instead.',
-      )
+    if (isShortMapsLink(text)) {
+      setBusy(true)
+      onError(null)
+      const result = await resolveShortLink(text)
+      setBusy(false)
+      if ('point' in result) {
+        onPick(result.point)
+        setQuery('')
+      } else {
+        onError(result.error)
+      }
+      return true
     }
+    return false
+  }
+
+  /**
+   * Resolve whatever is in the box to a pin.
+   *
+   * This is the path that must never depend on Google. The Autocomplete widget
+   * attaches a NATIVE keydown listener to this same input and calls
+   * stopPropagation() on Enter whenever its dropdown is open — React 19
+   * delegates events at the root, so an onKeyDown handler here never fires.
+   * That is why there is an explicit button: a click cannot be swallowed.
+   */
+  const handleManual = async () => {
+    const text = query.trim()
+    if (!text || busy) return
+    if (await resolve(text)) return
+    // Never fail silently. Before this, unparseable text did nothing at all,
+    // which is indistinguishable from the box being broken.
+    onError(
+      'Could not read a location from that. Paste a Google Maps link, or coordinates like "21.2514, 81.6296" — or tap the map.',
+    )
   }
 
   const useMyLocation = () => {
@@ -212,20 +309,45 @@ function SearchBar({
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
         />
         <input
-          ref={inputRef}
+          ref={ref}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
+            // preventDefault FIRST and unconditionally. This input sits inside
+            // the listing <form>, so an Enter that reaches the form submits a
+            // half-filled listing — which is what produced the misleading
+            // "Drop the location pin on the map" error.
             if (e.key === 'Enter') {
               e.preventDefault()
-              handleManual()
+              e.stopPropagation()
+              void handleManual()
             }
           }}
-          placeholder="Search a place, or paste Google Maps link / lat, lng"
+          onPaste={(e) => {
+            // Pasting a link should just work, with no second action. Read from
+            // the event rather than state — onChange has not fired yet.
+            const text = e.clipboardData.getData('text').trim()
+            if (!text) return
+            if (parseCoords(text) || isShortMapsLink(text)) {
+              e.preventDefault()
+              setQuery(text)
+              void resolve(text)
+            }
+          }}
+          placeholder="Paste a Google Maps link or lat, lng — or search"
           className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
+      <button
+        type="button"
+        onClick={() => void handleManual()}
+        disabled={!query.trim() || busy}
+        title="Use this link or coordinates"
+        className="shrink-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+      >
+        {busy ? 'Opening…' : 'Go'}
+      </button>
       <button
         type="button"
         onClick={useMyLocation}

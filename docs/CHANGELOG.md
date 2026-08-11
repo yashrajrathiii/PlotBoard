@@ -10,6 +10,64 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12
+
+**The location search box now accepts pasted links and coordinates.** Reported
+on the first day of real use: brokers could only set a pin by finding the plot
+by eye and tapping it, which is on the critical path of every listing.
+
+Three compounding faults, not one:
+
+- `parseCoords` had exactly **one** call site — a React `onKeyDown` Enter
+  handler. Google's legacy Places `Autocomplete` widget attaches a *native*
+  keydown listener to the same input and calls `stopPropagation()` on Enter
+  while its dropdown is open; React 19 delegates at the root, so the handler
+  never fired and `parseCoords` never ran.
+- Enter then fell through to **implicit submission of the listing form**, which
+  answered "Drop the location pin on the map" — the misleading message brokers
+  actually saw.
+- Unparseable text was a **silent no-op**, indistinguishable from a dead box.
+
+Fixes:
+
+- **An explicit "Go" button.** A click cannot be swallowed by a native keydown
+  listener, so the manual path no longer depends on Google at all. Enter still
+  works, and now calls `preventDefault()` unconditionally so it can never
+  submit a half-filled listing.
+- **Paste just works** — pasting a link or coordinates drops the pin with no
+  second action, reading from the paste event rather than state (which
+  `onChange` has not yet updated).
+- **Unrecognised text now says so**, naming the formats that do work.
+- **`parseCoords` widened** from 3 formats to 11, each one a form someone
+  actually pasted: `?api=1&query=` (the *official* Maps URL format, which the
+  old `[?&]q=` pattern could never match), `!3d..!4d..` from the `data=`
+  segment, `ll=`/`center=`/`daddr=`, `/place/lat,lng`, `geo:` URIs, degree +
+  hemisphere (`21.2514° N, 81.6296° E` — what Maps shows on long-press),
+  coordinates embedded mid-sentence, and integer-only pairs. Out-of-range
+  values are now rejected rather than dropping a pin in the sea.
+- **The Places widget is wrapped in try/catch.** It is deprecated for Google
+  Cloud projects created after 1 Mar 2025 and there is no error boundary in
+  this app — an unhandled throw unmounts the whole React root and shows a white
+  screen mid-listing. Losing the type-ahead is survivable; losing the app is not.
+- **The no-key branch now renders the input it always promised.** It claimed
+  "you can still paste coordinates below" while rendering no input at all, so a
+  lapsed key left brokers with no way to set a pin whatsoever. `LocationInput`
+  is now split out with no dependency on Google and used by both branches.
+
+**New `resolve-maps-link` Edge Function** for short links. `maps.app.goo.gl` is
+what the Google Maps *share sheet* produces — the most common paste from a
+phone — and it carries no coordinates; only the redirect target does, which a
+browser cannot read cross-origin.
+
+This endpoint fetches a caller-supplied URL, which is an SSRF shape, so it is
+contained deliberately: a **strict host allowlist** compared with `===` against
+the parsed hostname (never `includes()`, which `maps.app.goo.gl.evil.com` would
+satisfy), redirects followed **one hop at a time with the allowlist re-checked
+at each**, a signed-in caller, a 2 KB URL cap, 5-redirect and 8-second limits.
+Verified rejecting the lookalike host, a foreign host, and `file://`.
+
+Tests: 44 passing (16 new coordinate cases + 3 short-link detection).
+
 ## 2026-08-10 (later)
 
 **The Import button was invisible on every phone.**
