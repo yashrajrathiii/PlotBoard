@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Images, Loader2, TriangleAlert } from 'lucide-react'
 import type { Listing } from '../lib/types'
 import { buildShareText, copyText, type Sharer } from '../lib/share'
-import { listingShareFiles, shareFiles } from '../lib/shareMedia'
+import { canShareFiles, listingShareFiles, shareFiles } from '../lib/shareMedia'
+
+/**
+ * Whether this browser will accept files in a share sheet. Evaluated once — it
+ * cannot change during a session, and the probe allocates a File.
+ *
+ * Desktop browsers frequently cannot (Firefox has no Web Share at all; Chrome
+ * only on some platforms). Rather than hide the feature there, the dialog says
+ * so and falls back to the clipboard.
+ */
+const CAN_SHARE_FILES = canShareFiles()
 
 /**
  * "Share with photos" sheet.
@@ -17,7 +28,7 @@ import { listingShareFiles, shareFiles } from '../lib/shareMedia'
  * clipboard notice.
  */
 
-type Phase = 'preparing' | 'ready' | 'sharing' | 'done' | 'error'
+type Phase = 'preparing' | 'ready' | 'sharing' | 'done' | 'error' | 'unsupported'
 
 export default function ShareWithPhotosDialog({
   listing,
@@ -34,6 +45,7 @@ export default function ShareWithPhotosDialog({
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [includeVideo, setIncludeVideo] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [copiedOnly, setCopiedOnly] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const open = listing !== null
@@ -66,6 +78,16 @@ export default function ShareWithPhotosDialog({
       setPhase('preparing')
       setFiles([])
       setMessage(null)
+      return
+    }
+    // No point downloading photos this browser can never attach. Say so
+    // immediately and offer the clipboard instead of spinning pointlessly.
+    if (!CAN_SHARE_FILES) {
+      setPhase('unsupported')
+      setFiles([])
+      setMessage(
+        'This browser can’t attach files to a share. Open LD Board on your phone to send photos — or copy the details here.',
+      )
       return
     }
     const controller = new AbortController()
@@ -102,6 +124,13 @@ export default function ShareWithPhotosDialog({
   const text = buildShareText(listing, sharer, { videoIncluded: includeVideo })
   const totalBytes = files.reduce((n, f) => n + f.size, 0)
 
+  /** Fallback when the browser can't attach files at all. */
+  const handleCopyOnly = async () => {
+    const ok = await copyText(text)
+    setCopiedOnly(ok)
+    if (ok) setTimeout(close, 1200)
+  }
+
   const handleSend = async () => {
     setPhase('sharing')
     // Copy first, and always. WhatsApp frequently drops the caption when
@@ -127,7 +156,15 @@ export default function ShareWithPhotosDialog({
 
   const busy = phase === 'preparing' || phase === 'sharing'
 
-  return (
+  // PORTALLED TO document.body ON PURPOSE.
+  //
+  // ShareMenu renders inside ListingCard, which carries `isolate` — a stacking
+  // context. Inside one, z-[1300] only ranks against that card's own children,
+  // so the overlay rendered fine, locked body scroll, and was then painted
+  // underneath the following cards: present in the DOM and completely
+  // invisible. The card's `overflow-hidden` media wrapper compounds it.
+  // ConfirmDialog never hit this because pages render it at top level.
+  return createPortal(
     <div
       // Same stacking as ConfirmDialog: above the map panes and the tab bar.
       className="fixed inset-0 z-[1300] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -200,7 +237,9 @@ export default function ShareWithPhotosDialog({
               className={`flex items-start gap-1.5 text-xs rounded-lg px-2.5 py-1.5 border ${
                 phase === 'done'
                   ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
-                  : 'text-red-700 bg-red-50 border-red-200'
+                  : phase === 'unsupported'
+                    ? 'text-amber-800 bg-amber-50 border-amber-200'
+                    : 'text-red-700 bg-red-50 border-red-200'
               }`}
             >
               {phase === 'done' && <Check size={13} className="mt-0.5 shrink-0" />}
@@ -208,7 +247,7 @@ export default function ShareWithPhotosDialog({
             </p>
           )}
 
-          {phase !== 'done' && (
+          {phase !== 'done' && phase !== 'unsupported' && (
             <p className="text-xs text-gray-500 leading-snug">
               The details are copied to your clipboard as well — paste them into the
               chat if WhatsApp doesn’t include them.
@@ -225,16 +264,27 @@ export default function ShareWithPhotosDialog({
           >
             {phase === 'done' ? 'Close' : 'Cancel'}
           </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={busy || files.length === 0 || phase === 'done'}
-            className="flex-1 bg-[#25D366] hover:brightness-95 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
-          >
-            {phase === 'sharing' ? 'Sending…' : 'Send to WhatsApp'}
-          </button>
+          {phase === 'unsupported' ? (
+            <button
+              type="button"
+              onClick={() => void handleCopyOnly()}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg py-2.5"
+            >
+              {copiedOnly ? 'Copied!' : 'Copy details'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={busy || files.length === 0 || phase === 'done'}
+              className="flex-1 bg-[#25D366] hover:brightness-95 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
+            >
+              {phase === 'sharing' ? 'Sending…' : 'Send to WhatsApp'}
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -2,17 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, Images, ListChecks, Share2 } from 'lucide-react'
 import type { Listing } from '../lib/types'
 import { buildShareText, copyText, whatsappShareUrl } from '../lib/share'
-import { canShareFiles } from '../lib/shareMedia'
 import ShareWithPhotosDialog from './ShareWithPhotosDialog'
 import { useAuth } from '../context/AuthContext'
 import { useShareSelection } from '../context/ShareSelectionContext'
-
-/**
- * Whether this browser can put files in a share sheet. Computed once at module
- * load rather than per render — it cannot change during a session, and the
- * probe allocates a File.
- */
-const CAN_SHARE_FILES = canShareFiles()
 
 function WhatsAppIcon({ size = 15 }: { size?: number }) {
   return (
@@ -100,13 +92,18 @@ export default function ShareMenu({
             onClick={handleWhatsApp}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
           >
-            <WhatsAppIcon /> {CAN_SHARE_FILES ? 'Send text only' : 'WhatsApp'}
+            <WhatsAppIcon /> Send text only
           </button>
           {/* Photos can only ride along on a SINGLE listing: navigator.share
               needs a fresh tap each time, so a multi-listing photo share would
               be one tap per listing. Naming the two paths explicitly is what
-              stops brokers hunting for photos inside "Select multiple". */}
-          {CAN_SHARE_FILES && hasMedia && (
+              stops brokers hunting for photos inside "Select multiple".
+
+              Shown whenever the listing HAS media, even on browsers that can't
+              share files. Hiding it there made the feature invisible with no
+              explanation — including on the developer's own desktop. The dialog
+              says what's wrong and offers the clipboard instead. */}
+          {hasMedia && (
             <button
               onClick={() => {
                 setPhotoShare(listing)

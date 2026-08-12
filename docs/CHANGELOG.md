@@ -47,6 +47,22 @@ arriving as a normal gallery beat photos buried in an attachment.
   there is no dead option. URLs are re-resolved at share time rather than
   trusting `media.url`, since signed URLs expire after an hour.
 
+Two follow-up fixes after the first try on a real machine:
+
+- **The menu item was hidden wherever files can't be shared** — including on the
+  developer's own desktop, where it looked like the feature had simply not
+  shipped. It now appears whenever the listing *has* media, and the dialog
+  explains when the browser can't attach files, offering the clipboard instead
+  of a dead button. Discoverable beats tidy.
+- **The dialog rendered but was invisible.** `ShareMenu` lives inside
+  `ListingCard`, which carries `isolate` — a stacking context — so `z-[1300]`
+  only ranked against that one card's children and the overlay was painted
+  *underneath* the following cards. It was in the DOM and had locked body
+  scroll, which made it look like a render failure rather than a paint-order
+  one. Now portalled to `document.body`, which also escapes the card's
+  `overflow-hidden`. `ConfirmDialog` never hit this because pages render it at
+  top level.
+
 Verified against real R2 media: 4 photos → 4 files, **all `image/jpeg`** with
 `ff d8 ff` magic bytes (no WebP), 157–238 KB each, ~3 s. A nonexistent path is
 skipped rather than throwing; a listing with no media returns empty. Share text
