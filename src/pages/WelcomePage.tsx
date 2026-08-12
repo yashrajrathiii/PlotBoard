@@ -72,7 +72,7 @@ export default function WelcomePage() {
             <UserRound size={24} />
           </span>
           <h1 className="text-2xl font-bold text-gray-900">
-            {firstTime ? 'Welcome to PlotBoard' : 'Your profile'}
+            {firstTime ? 'Welcome to LD Board' : 'Your profile'}
           </h1>
         </div>
 

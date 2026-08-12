@@ -54,7 +54,7 @@ export default function LoginPage() {
           <span className="bg-emerald-600 text-white rounded-xl p-2">
             <MapPin size={24} />
           </span>
-          <h1 className="text-2xl font-bold text-gray-900">PlotBoard</h1>
+          <h1 className="text-2xl font-bold text-gray-900">LD Board</h1>
         </div>
 
         <form

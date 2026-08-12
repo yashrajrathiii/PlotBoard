@@ -33,7 +33,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <span className="bg-emerald-600 text-white rounded-lg p-1.5">
             <MapPin size={18} />
           </span>
-          <span className="font-bold text-gray-900">PlotBoard</span>
+          <span className="font-bold text-gray-900">LD Board</span>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -67,7 +67,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span className="bg-emerald-600 text-white rounded-lg p-1.5">
               <MapPin size={18} />
             </span>
-            <span className="font-bold text-gray-900">PlotBoard</span>
+            <span className="font-bold text-gray-900">LD Board</span>
           </div>
           <NotificationBell />
         </div>

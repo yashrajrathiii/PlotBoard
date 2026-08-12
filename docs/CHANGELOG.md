@@ -10,6 +10,34 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12 (rename)
+
+**PlotBoard is now LD Board.** The app *name* only — every external identifier
+is deliberately untouched.
+
+Changed (11 user-visible sites): the wordmark in the desktop sidebar and mobile
+top bar, the login heading, the first-run welcome, the WhatsApp invite copy, the
+two OS notification titles, the browser `<title>` and meta description, and the
+PWA manifest `name` / `short_name`.
+
+**The PWA relabels in place — nobody reinstalls.** The manifest has no `id`, so
+the app identity defaults to `start_url`. Both `start_url` and `scope` remain
+`"/"`, and no `id` was added; the generated manifest was checked after building
+to confirm all three. Adding an `id` or changing `start_url` during a rename is
+what makes Android treat it as a brand-new app and strand the installed one.
+
+Left alone on purpose — these are infrastructure, not branding, and renaming
+any of them breaks something live: the R2 bucket `plotboard-media` (every
+`storage_path` resolves against it), the Vercel domain (baked into invite
+links, R2 CORS, Supabase redirect URLs and both map keys' referrer
+restrictions), the `pb_device_id` localStorage key (resetting it would trip the
+2-device limit and lock a broker out), the `plotboard-cleanup-sold-media` cron
+job, the GitHub repo, and the Supabase `listing-media` bucket.
+
+**Manual step:** the invite *email* body is rendered by Supabase's own
+template, not this repo — update it at Supabase → Authentication → Email
+Templates → Invite user.
+
 ## 2026-08-12 (later)
 
 **Shares no longer leak prices, and route enquiries to the person sharing.**

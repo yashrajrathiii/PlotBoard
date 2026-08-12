@@ -8,13 +8,13 @@ export type NotificationKind = 'new_listing' | 'sold' | 'status_change'
 export function notificationTitle(kind: string): string {
   switch (kind) {
     case 'new_listing':
-      return 'New listing on PlotBoard'
+      return 'New listing on LD Board'
     case 'sold':
       return 'A listing was sold'
     case 'status_change':
       return 'Listing status changed'
     default:
-      return 'PlotBoard'
+      return 'LD Board'
   }
 }
 

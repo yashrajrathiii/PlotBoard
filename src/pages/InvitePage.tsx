@@ -175,7 +175,7 @@ export default function InvitePage() {
   }
 
   const whatsappMessage = (link: { email: string; url: string }) =>
-    `You're invited to join *PlotBoard* — our shared property listing board.\n` +
+    `You're invited to join *LD Board* — our shared property listing board.\n` +
     `Tap this link to create your account (${link.email}):\n${link.url}`
 
   return (

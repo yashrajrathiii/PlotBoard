@@ -8,14 +8,14 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // Installable PWA: brokers add PlotBoard to their phone's home screen and
+    // Installable PWA: brokers add LD Board to their phone's home screen and
     // open it like a native app. autoUpdate silently ships new versions.
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        name: 'PlotBoard',
-        short_name: 'PlotBoard',
+        name: 'LD Board',
+        short_name: 'LD Board',
         description: 'Shared property listing board',
         theme_color: '#059669',
         background_color: '#ffffff',
