@@ -30,13 +30,21 @@ export interface Sharer {
  *    relationship to the property, so printing it beside the sharer's name
  *    would be actively misleading.
  */
-export function buildShareText(l: Listing, sharer: Sharer | null): string {
+export function buildShareText(
+  l: Listing,
+  sharer: Sharer | null,
+  opts: { videoIncluded?: boolean } = {},
+): string {
   const lines = [
     `*${l.property_type} — ${l.address_line1}, ${l.city}*`,
     `Address: ${addressOneLine(l)}`,
     `Size: ${formatAreaEntered(l.area, l.area_unit)}`,
   ]
   if (l.front) lines.push(`Front: ${formatFront(l.front, l.front_unit)}`)
+  // Mention a walkthrough video the recipient isn't getting, so they know to
+  // ask. Suppressed when the video is actually attached to this share.
+  const hasVideo = l.listing_media.some((m) => m.media_type === 'video')
+  if (hasVideo && !opts.videoIncluded) lines.push('Video available on request')
   lines.push(`Status: ${l.status}`)
   if (l.notes) lines.push(`Note: ${l.notes}`)
   lines.push(`Map: https://www.google.com/maps?q=${l.latitude},${l.longitude}`)

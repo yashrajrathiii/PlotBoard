@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, ListChecks, Share2 } from 'lucide-react'
+import { Check, Copy, Images, ListChecks, Share2 } from 'lucide-react'
 import type { Listing } from '../lib/types'
 import { buildShareText, copyText, whatsappShareUrl } from '../lib/share'
+import { canShareFiles } from '../lib/shareMedia'
+import ShareWithPhotosDialog from './ShareWithPhotosDialog'
 import { useAuth } from '../context/AuthContext'
 import { useShareSelection } from '../context/ShareSelectionContext'
+
+/**
+ * Whether this browser can put files in a share sheet. Computed once at module
+ * load rather than per render — it cannot change during a session, and the
+ * probe allocates a File.
+ */
+const CAN_SHARE_FILES = canShareFiles()
 
 function WhatsAppIcon({ size = 15 }: { size?: number }) {
   return (
@@ -31,6 +40,7 @@ export default function ShareMenu({
 }) {
   const [open, setOpenState] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [photoShare, setPhotoShare] = useState<Listing | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const { profile } = useAuth()
   const selection = useShareSelection()
@@ -38,6 +48,8 @@ export default function ShareMenu({
   // original poster — see the note in share.ts. Rates never leave the app at
   // all, so there is no rate-visibility check here any more.
   const sharer = profile ? { name: profile.name, phone: profile.phone } : null
+  // No point offering a photo share on a listing with nothing attached.
+  const hasMedia = listing.listing_media.length > 0
 
   const setOpen = (v: boolean) => {
     setOpenState(v)
@@ -81,13 +93,30 @@ export default function ShareMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-white rounded-xl border border-gray-200 shadow-lg py-1">
+        // w-56, not w-44: "Share with photos" and "Send text only" don't fit
+        // at the old width and would wrap.
+        <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-white rounded-xl border border-gray-200 shadow-lg py-1">
           <button
             onClick={handleWhatsApp}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
           >
-            <WhatsAppIcon /> WhatsApp
+            <WhatsAppIcon /> {CAN_SHARE_FILES ? 'Send text only' : 'WhatsApp'}
           </button>
+          {/* Photos can only ride along on a SINGLE listing: navigator.share
+              needs a fresh tap each time, so a multi-listing photo share would
+              be one tap per listing. Naming the two paths explicitly is what
+              stops brokers hunting for photos inside "Select multiple". */}
+          {CAN_SHARE_FILES && hasMedia && (
+            <button
+              onClick={() => {
+                setPhotoShare(listing)
+                setOpen(false)
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <Images size={15} className="text-emerald-600" /> Share with photos
+            </button>
+          )}
           <button
             onClick={() => void handleCopy()}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -116,6 +145,12 @@ export default function ShareMenu({
           )}
         </div>
       )}
+
+      <ShareWithPhotosDialog
+        listing={photoShare}
+        sharer={sharer}
+        onClose={() => setPhotoShare(null)}
+      />
     </div>
   )
 }

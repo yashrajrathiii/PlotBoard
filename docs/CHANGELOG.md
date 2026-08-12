@@ -10,6 +10,49 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12 (share with photos)
+
+**Sharing a listing can now send its photos, not just the text.** Previously a
+broker had to find the photos in the app, save them, and attach them by hand —
+so in practice they never got sent.
+
+The PDF export planned earlier is **dropped**. It only ever existed to work
+around an assumption that turned out to be false: WhatsApp *can* receive image
+files straight from the browser via `navigator.share({ files })`, and photos
+arriving as a normal gallery beat photos buried in an attachment.
+
+- **New "Share with photos"** item in the listing share menu, opening a sheet
+  that fetches the photos and hands them to the OS share sheet.
+- **Photos are converted WebP → JPEG, and this is not cosmetic.** Uploads are
+  stored as WebP, and **WhatsApp treats a `.webp` file as a sticker** — sharing
+  them unconverted would deliver a row of stickers. The canvas is filled white
+  before drawing, because WebP alpha would otherwise encode as solid black.
+- **The MIME type comes from `media_type`, never from the response.** The R2
+  upload deliberately omits Content-Type, so blobs can arrive as
+  `application/octet-stream`, which share targets reject.
+- **Two taps, unavoidably.** `navigator.share` requires transient user
+  activation and fetching takes a second or two, so doing both in one handler
+  throws `NotAllowedError`. Tap one opens the sheet and starts fetching; tap two
+  shares inside a fresh gesture. The sheet earns that second tap by hosting the
+  video opt-in and the clipboard notice.
+- **The text is always copied to the clipboard too.** WhatsApp frequently drops
+  the caption when several images are attached — untestable from here — so the
+  clipboard is the actual guarantee, and the sheet says so.
+- **Video is opt-in, off by default** (up to 20 MB, slow on mobile data). When a
+  video exists but isn't being sent, the text says "Video available on request".
+- **Multi-select stays text-only.** One WhatsApp message per listing would cost
+  one tap per listing, so photos are deliberately a single-listing action and
+  the menu wording makes that explicit rather than leaving brokers hunting.
+- The menu item renders **only where the browser can actually share files**, so
+  there is no dead option. URLs are re-resolved at share time rather than
+  trusting `media.url`, since signed URLs expire after an hour.
+
+Verified against real R2 media: 4 photos → 4 files, **all `image/jpeg`** with
+`ff d8 ff` magic bytes (no WebP), 157–238 KB each, ~3 s. A nonexistent path is
+skipped rather than throwing; a listing with no media returns empty. Share text
+re-checked on a `rate_visible = true` listing — no `₹`, no rate words, no rate
+digits.
+
 ## 2026-08-12 (rename)
 
 **PlotBoard is now LD Board.** The app *name* only — every external identifier
