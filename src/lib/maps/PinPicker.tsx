@@ -12,6 +12,7 @@ import { GOOGLE_MAPS_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, PIN_ZOOM, hasGoogleMaps 
 import MapPlaceholder from './MapPlaceholder'
 import { isShortMapsLink, parseCoords, withinIndia, type LatLng } from '../geo'
 import { resolveShortLink } from './resolveShortLink'
+import { forwardGeocode, isPlusCode, type GeocodeHit } from './forwardGeocode'
 import { reverseGeocode, type PlaceAddress } from './reverseGeocode'
 
 /**
@@ -100,6 +101,7 @@ function PickerInner({
   className: string
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [place, setPlace] = useState<PlaceAddress | null>(null)
 
   const pick = useCallback(
@@ -109,6 +111,7 @@ function PickerInner({
         return
       }
       setError(null)
+      setNotice(null)
       onChange(p)
       // Look up the colony name for the new pin. Best-effort: if it fails the
       // broker just types the address themselves.
@@ -123,8 +126,13 @@ function PickerInner({
 
   return (
     <div className="space-y-2">
-      <SearchBar onPick={pick} onError={setError} />
+      <SearchBar onPick={pick} onError={setError} onNotice={setNotice} />
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {notice && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+          {notice}
+        </p>
+      )}
 
       <div className={`${className} rounded-xl overflow-hidden border border-gray-200`}>
         <Map
@@ -199,9 +207,11 @@ function Recenter({ target }: { target: LatLng | null }) {
 function SearchBar({
   onPick,
   onError,
+  onNotice,
 }: {
   onPick: (p: LatLng) => void
   onError: (msg: string | null) => void
+  onNotice: (msg: string | null) => void
 }) {
   const places = useMapsLibrary('places')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -228,20 +238,34 @@ function SearchBar({
     return () => listener?.remove()
   }, [places, onPick])
 
-  return <LocationInput ref={inputRef} onPick={onPick} onError={onError} />
+  return (
+    <LocationInput
+      ref={inputRef}
+      onPick={onPick}
+      onError={onError}
+      onNotice={onNotice}
+      // Only available here, where Google is loaded. This is what makes Plus
+      // Codes and typed village names resolve.
+      onSearch={forwardGeocode}
+    />
+  )
 }
 
 /**
- * The input, the Go button and "use my location" — with no dependency on
- * Google whatsoever.
+ * The input, the Go button and "use my location". Knows nothing about Google
+ * itself — the optional `onSearch` is injected by whoever does.
  */
 function LocationInput({
   onPick,
   onError,
+  onNotice,
+  onSearch,
   ref,
 }: {
   onPick: (p: LatLng) => void
   onError: (msg: string | null) => void
+  onNotice?: (msg: string | null) => void
+  onSearch?: (query: string) => Promise<GeocodeHit | null>
   ref?: React.Ref<HTMLInputElement>
 }) {
   const [query, setQuery] = useState('')
@@ -252,10 +276,43 @@ function LocationInput({
     const parsed = parseCoords(text)
     if (parsed) {
       onError(null)
+      onNotice?.(null)
       onPick(parsed)
       setQuery('')
       return true
     }
+
+    // A Plus Code or a place name — neither is decodable locally. The short
+    // Plus Code form people share ("8H3H+9WX Tendua-1") is meaningless without
+    // resolving the locality that follows it, so the whole string goes to the
+    // geocoder as-is.
+    if (onSearch && !isShortMapsLink(text)) {
+      setBusy(true)
+      onError(null)
+      onNotice?.(null)
+      const hit = await onSearch(text)
+      setBusy(false)
+      if (hit) {
+        onPick(hit.point)
+        setQuery('')
+        // A village centroid looks exactly like a precise pin on screen, so say
+        // so — otherwise a listing gets saved kilometres from the actual plot
+        // and nobody notices until someone drives out there.
+        onNotice?.(
+          hit.approximate
+            ? `Approximate — "${hit.label ?? text}" is an area, not a point. Drag the pin onto the exact plot.`
+            : null,
+        )
+        return true
+      }
+      if (isPlusCode(text)) {
+        onError(
+          'Could not find that Plus Code. Include the town after it, e.g. "8H3H+9WX Tendua-1, Chhattisgarh".',
+        )
+        return true
+      }
+    }
+
     if (isShortMapsLink(text)) {
       setBusy(true)
       onError(null)
@@ -335,7 +392,7 @@ function LocationInput({
               void resolve(text)
             }
           }}
-          placeholder="Paste a Google Maps link or lat, lng — or search"
+          placeholder="Maps link, coordinates, Plus Code, or place name"
           className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>

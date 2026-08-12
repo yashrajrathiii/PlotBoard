@@ -78,6 +78,23 @@ Verified rejecting the lookalike host, a foreign host, and `file://`.
   rather than the caller inferring meaning from `match.length` — that was
   already fragile with two shapes and would not survive DMS's eight groups.
 
+- **Plus Codes and place names now resolve** via Google forward geocoding —
+  `8H3H+9WX Tendua-1, Chhattisgarh`. Worth allowing because Plus Codes are the
+  addressing system that actually works in rural Chhattisgarh, where plots have
+  no street address. A *full* code could be decoded offline, but the form
+  people share is the **short** one, which is meaningless without resolving the
+  town named after it — so the whole string goes to the geocoder as-is.
+- **Approximate results are labelled.** A village-name lookup returns the
+  *centroid*, potentially kilometres from the plot, and on screen that pin is
+  indistinguishable from a precise one — a listing would be saved badly wrong
+  with nobody noticing. Those now show "Approximate — drag the pin onto the
+  exact plot".
+  The precision test keys on `types`, **not** `location_type`: Google returns a
+  Plus Code as `GEOMETRIC_CENTER`, the same value it uses for a road midpoint,
+  despite pinning a ~4 m square. Keying off `location_type` flagged every Plus
+  Code as approximate, and a warning that fires on everything is one brokers
+  stop reading. Verified: Plus Code → no warning, `Tendua-1` → warning.
+
 Tests: 50 passing (22 new coordinate cases + 3 short-link detection).
 
 ## 2026-08-10 (later)
