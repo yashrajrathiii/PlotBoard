@@ -21,6 +21,14 @@ import type { ListingDraft, ParsedListing } from '../lib/listingParser'
 import { compressPhoto, prettyBytes, validateVideo } from '../lib/media'
 import { deleteMedia, refreshStaticMap, uploadMedia } from '../lib/mediaStorage'
 import { PHOTO_LIMIT, VIDEO_MAX_SECONDS } from '../lib/limits'
+import {
+  MAGNITUDES,
+  factorOf,
+  parseAmountInput,
+  splitAmount,
+  type Magnitude,
+} from '../lib/amount'
+import { formatINRCompact, formatRateEntered } from '../lib/format'
 import BackButton from './BackButton'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -101,7 +109,12 @@ export default function ListingForm({
   )
   const [area, setArea] = useState(existing ? String(existing.area) : initial?.area != null ? String(initial.area) : '')
   const [unit, setUnit] = useState<AreaUnit>(existing?.area_unit ?? initial?.area_unit ?? 'sqft')
-  const [rate, setRate] = useState(existing ? String(existing.rate) : initial?.rate != null ? String(initial.rate) : '')
+  // The rate box holds a HUMAN number ("4") and `rateMag` holds the multiplier
+  // ("L"), so the two entry paths — typing "4L" and typing "4" then tapping L —
+  // converge on identical state. `splitAmount` decides how a saved rate reopens.
+  const initialRate = splitAmount(existing?.rate ?? initial?.rate ?? 0)
+  const [rate, setRate] = useState(initialRate.display)
+  const [rateMag, setRateMag] = useState<Magnitude | null>(initialRate.magnitude)
   const [rateUnit, setRateUnit] = useState<RateUnit>(existing?.rate_unit ?? initial?.rate_unit ?? 'sqft')
   const [front, setFront] = useState(existing?.front != null ? String(existing.front) : initial?.front != null ? String(initial.front) : '')
   const [frontUnit, setFrontUnit] = useState<FrontUnit>(existing?.front_unit ?? initial?.front_unit ?? 'ft')
@@ -196,12 +209,42 @@ export default function ListingForm({
     setMediaBusy(false)
   }
 
+  /**
+   * What will actually be saved: the typed number times the selected chip.
+   *
+   * A suffix still sitting in the box wins over the chip — that only happens
+   * mid-keystroke (onChange strips it and lights the chip), and applying both
+   * would multiply twice.
+   */
+  const rateParsed = parseAmountInput(rate)
+  const resolvedRate = !rateParsed
+    ? NaN
+    : rateParsed.magnitude
+      ? rateParsed.value
+      : rateParsed.value * factorOf(rateMag)
+
+  /**
+   * A per-sqft rate in crores is almost always "Cr" left selected when /acre
+   * was meant. It saves fine, but `rate_per_sqft` is a generated column that
+   * feeds the board's ₹/sqft range filters and every deal value — so one
+   * mis-tap quietly skews the numbers for all 20 brokers, and nothing
+   * downstream would flag it. Warn, never block: an unusual listing is still
+   * the poster's call.
+   */
+  const rateWarning =
+    rateUnit === 'sqft' && Number.isFinite(resolvedRate) && resolvedRate > 1_00_000
+      ? `That's ${formatINRCompact(resolvedRate)} per sqft — did you mean /acre?`
+      : null
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
 
     const areaNum = parseFloat(area)
-    const rateNum = parseFloat(rate)
+    // NOT parseFloat. The rate box is a text input so it can accept "5.5k", and
+    // parseFloat("5.5k") is 5.5 — which would save ₹5.5 for ₹5,500, pass the
+    // `rate > 0` check, and look entirely plausible on the card.
+    const rateNum = resolvedRate
     if (!line1.trim()) return setError('Address line 1 is required.')
     if (!city.trim() || !stateName.trim()) return setError('City and state are required.')
     if (pincode && !/^[1-9][0-9]{5}$/.test(pincode)) {
@@ -545,14 +588,27 @@ export default function ListingForm({
             }
           >
             <div className="flex gap-2">
+              {/* type="text", not "number": a number input reports "" for any
+                  non-numeric character, so "5.5k" would be silently
+                  unenterable. inputMode keeps the numeric keypad on phones. */}
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 required
-                min="0.01"
-                step="any"
-                placeholder={rateUnit === 'acre' ? 'e.g. 8000000' : 'e.g. 1850'}
+                placeholder={rateUnit === 'acre' ? 'e.g. 4L' : 'e.g. 1850'}
                 value={rate}
-                onChange={(e) => setRate(e.target.value)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  // Typing a suffix selects the chip and drops the letters, so
+                  // "4L" lands in exactly the same state as "4" + tapping L.
+                  const parsed = parseAmountInput(raw)
+                  if (parsed?.magnitude) {
+                    setRateMag(parsed.magnitude)
+                    setRate(String(parsed.value / factorOf(parsed.magnitude)))
+                  } else {
+                    setRate(raw)
+                  }
+                }}
                 className={inputClass}
               />
               <select
@@ -582,6 +638,46 @@ export default function ListingForm({
                 {rateVisible ? 'Shared' : 'Hidden'}
               </button>
             </div>
+
+            {/* Chips get their own line. At 375px the row above already holds
+                the input, the /sqft select and the Shared toggle, leaving the
+                input ~135px — three more inline controls would crush it. The
+                resolved value sits on the same line, costing no extra height. */}
+            <div className="flex items-center gap-1.5 mt-1.5">
+              {MAGNITUDES.map((m) => {
+                const on = rateMag === m.key
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    // Tapping the selected chip clears it, so there is always a
+                    // way back to a plain number without retyping.
+                    onClick={() => setRateMag(on ? null : m.key)}
+                    aria-pressed={on}
+                    title={`Multiply by ${m.factor.toLocaleString('en-IN')}`}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                      on
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                )
+              })}
+              {Number.isFinite(resolvedRate) && resolvedRate > 0 && (
+                <span className="ml-auto text-xs text-gray-600 tabular-nums truncate">
+                  = {formatRateEntered(resolvedRate, rateUnit)}
+                </span>
+              )}
+            </div>
+
+            {rateWarning && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
+                {rateWarning}
+              </p>
+            )}
+
             <p className="text-xs text-gray-400 mt-1">
               {rateVisible
                 ? 'Other members will see the rate and total value.'

@@ -1,3 +1,4 @@
+import { magnitudeFactor } from './amount'
 import type {
   AreaUnit,
   ContactType,
@@ -68,14 +69,15 @@ function num(raw: string): number {
   return parseFloat(raw.replace(/,/g, ''))
 }
 
-/** "45 lakh" → 4500000, "1.2 cr" → 12000000. */
+/**
+ * "45 lakh" → 4500000, "1.2 cr" → 12000000.
+ *
+ * The multipliers live in `amount.ts` so this parser and the rate field agree
+ * on what "L" means — they were duplicated, and two copies of a definition like
+ * that only ever drift in one direction.
+ */
 function applyMagnitude(value: number, word: string | undefined): number {
-  if (!word) return value
-  const w = word.toLowerCase()
-  if (/^(l|lac|lakh|lakhs)$/.test(w)) return value * 100_000
-  if (/^(cr|crore|crores)$/.test(w)) return value * 10_000_000
-  if (/^(k|thousand)$/.test(w)) return value * 1_000
-  return value
+  return value * magnitudeFactor(word)
 }
 
 const TYPE_PATTERNS: [RegExp, string][] = [

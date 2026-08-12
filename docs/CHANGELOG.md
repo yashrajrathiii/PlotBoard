@@ -10,6 +10,47 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12 (rate shorthand)
+
+**The rate field now takes `5.5k`, `4L`, `1Cr`, and offers K / L / Cr chips.**
+Brokers quote in lakhs and crores; typing `400000` was slow and a wrong zero is
+invisible once saved, because nothing on the card looks obviously absurd at 10×.
+
+- **Two paths that converge.** Typing `4L` strips the suffix and lights the L
+  chip, landing in *exactly* the same state as typing `4` and tapping L — so the
+  two ways of entering a rate are the same mechanism, not two competing ones.
+- **Chips are a sticky multiplier**, grey → green, and tapping the green one
+  clears it. A live line shows what will actually be saved (`= ₹4,00,000/acre`).
+- **New `src/lib/amount.ts`** owns the multipliers. They previously lived
+  privately inside `listingParser.ts`; that parser now imports from here, so the
+  free-text parser and the rate field cannot disagree about what "L" means.
+- **Chips sit on their own line.** At 375px the rate row already holds the
+  input, the `/sqft` select and the Shared toggle, leaving the input ~135px —
+  three more inline controls would have crushed it. The resolved value shares
+  that line, costing no extra height.
+- **Implausible per-sqft rates are flagged.** `1Cr` with `/sqft` still selected
+  means ₹1 crore per square foot; it saves fine but `rate_per_sqft` is a
+  generated column feeding the board's ₹/sqft filters and every deal value, so
+  one mis-tap would quietly skew the numbers for all 20 brokers with nothing
+  downstream to catch it. An amber note asks "did you mean /acre?" and never
+  blocks.
+
+**The dangerous part, and why it needed a database check.** The field had to
+become `type="text"` — a number input reports `""` for any non-numeric
+character, so `5.5k` was literally unenterable. But `parseFloat("5.5k")` returns
+**5.5**, not `NaN`. Changing the input type without replacing `parseFloat` would
+have saved ₹5.5 for ₹5,500 — a 1000× error that passes the `rate > 0` check and
+looks entirely plausible on a card. `handleSubmit` now resolves through
+`parseAmountInput`, and this was verified by creating a real listing from `5.5k`
+and reading the row back: `rate = 5500`, `deal_value = 5500000`. Not by looking
+at the UI.
+
+Also verified: typing `4L` ≡ typing `4` + tapping L; tapping a green chip
+clears it; a listing saved at 400000/acre reopens as `4` with L green; one at
+5500 reopens as plain `5500` with no chip (`splitAmount` never decomposes below
+one lakh, because `1.85 K` is harder to read than `1850`); the warning fires on
+`1Cr` + `/sqft` and not on `1Cr` + `/acre`. Tests: **79 passing** (29 new).
+
 ## 2026-08-12 (PWA staleness)
 
 **Installed apps now pick up new builds without being force-closed.**

@@ -4,6 +4,7 @@ import {
   type ListingDraft,
 } from '../src/lib/listingParser'
 import { isShortMapsLink, parseCoords } from '../src/lib/geo'
+import { parseAmountInput, splitAmount } from '../src/lib/amount'
 
 const samples: { label: string; text: string; expect: Record<string, unknown> }[] = [
   {
@@ -332,6 +333,85 @@ for (const [text, want] of [
   } else {
     fail++
     console.log(`FAIL  shortlink: ${text} expected ${want}, got ${got}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// parseAmountInput — the rate field's K / L / Cr shorthand.
+//
+// The critical case is "5.5k". parseFloat("5.5k") returns 5.5, so a rate field
+// that accepts text and still uses parseFloat saves ₹5.5 where ₹5,500 was
+// meant — passing every validity check and looking plausible on the card.
+// ---------------------------------------------------------------------------
+
+for (const [input, wantValue, wantMag] of [
+  ['5.5k', 5500, 'k'],
+  ['4L', 400000, 'l'],
+  ['1Cr', 10000000, 'cr'],
+  ['1 cr', 10000000, 'cr'],
+  ['2 lakh', 200000, 'l'],
+  ['3 crores', 30000000, 'cr'],
+  ['1850', 1850, null],
+  ['45,00,000', 4500000, null],
+  ['₹45,00,000', 4500000, null],
+  ['0.5cr', 5000000, 'cr'],
+  // Rejections — each of these must NOT silently become a number.
+  ['', null, null],
+  ['abc', null, null],
+  ['4LL', null, null],
+  ['5.5kk', null, null],
+  ['1850/sqft', null, null],
+] as const) {
+  const got = parseAmountInput(input)
+  const ok =
+    wantValue === null
+      ? got === null
+      : got !== null && Math.abs(got.value - wantValue) < 1e-6 && got.magnitude === wantMag
+  if (ok) {
+    pass++
+    console.log(`PASS  amount: ${JSON.stringify(input)} -> ${wantValue ?? 'null'}`)
+  } else {
+    fail++
+    console.log(
+      `FAIL  amount: ${JSON.stringify(input)} expected ${wantValue ?? 'null'}/${wantMag}, got ${JSON.stringify(got)}`,
+    )
+  }
+}
+
+// splitAmount — how a saved rate reopens in the edit form. Never below 1 lakh.
+for (const [value, wantDisplay, wantMag] of [
+  [400000, '4', 'l'],
+  [10000000, '1', 'cr'],
+  [8000000, '80', 'l'],
+  [12500000, '1.25', 'cr'],
+  [1850, '1850', null],
+  [5900, '5900', null],
+  // Not clean enough to split — raw digits are clearer than "1.8734 L".
+  [187340, '187340', null],
+] as const) {
+  const got = splitAmount(value)
+  if (got.display === wantDisplay && got.magnitude === wantMag) {
+    pass++
+    console.log(`PASS  splitAmount: ${value} -> ${wantDisplay}${wantMag ?? ''}`)
+  } else {
+    fail++
+    console.log(
+      `FAIL  splitAmount: ${value} expected ${wantDisplay}/${wantMag}, got ${JSON.stringify(got)}`,
+    )
+  }
+}
+
+// Round-trip: whatever splitAmount shows must parse back to the same value.
+for (const value of [400000, 10000000, 8000000, 12500000, 1850, 5900, 187340]) {
+  const { display, magnitude } = splitAmount(value)
+  const back = parseAmountInput(display)
+  const resolved = back ? back.value * (magnitude ? { k: 1e3, l: 1e5, cr: 1e7 }[magnitude] : 1) : NaN
+  if (Math.abs(resolved - value) < 1e-6) {
+    pass++
+    console.log(`PASS  round-trip: ${value}`)
+  } else {
+    fail++
+    console.log(`FAIL  round-trip: ${value} came back as ${resolved}`)
   }
 }
 
