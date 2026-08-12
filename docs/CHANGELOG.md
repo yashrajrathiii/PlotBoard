@@ -10,6 +10,37 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12 (PWA staleness)
+
+**Installed apps now pick up new builds without being force-closed.**
+
+This had cost real time three times — the Map View tab, the Import button and
+the share dialog each looked unshipped when they were live on production. The
+cause was never the deploy: the SW ships with `skipWaiting` + `clientsClaim`,
+but the browser only *checks* for a new worker on a fresh navigation, so a PWA
+resumed from the background can run a build that is days old.
+
+- **Update check on foreground.** `visibilitychange` → visible triggers
+  `registration.update()`, throttled to once per 30 s. It is a conditional
+  request the browser answers from cache when nothing changed, so it is cheap
+  on mobile data.
+- **The reload will not run over unsaved work.** This is why the check wasn't
+  added earlier: a naive version would reload while a broker was mid-listing and
+  destroy the draft. `hasUnsavedWork()` defers the reload while any `<textarea>`
+  holds text, or any field inside a `<form>` does, and retries every 5 s so the
+  update lands the moment they leave the form rather than at the next cold start.
+  Deliberately **not** route-based: the Import and Add-from-map description
+  boxes are not inside a `<form>`, and a pasted WhatsApp message is exactly what
+  must not be vaporised.
+- The board's search box is a bare `<input>` outside any form, so filtering
+  never blocks an update. The add-listing form pre-fills city/state and so
+  always counts as dirty — which is the intended behaviour: never reload that
+  screen.
+
+Verified against the real DOM: board idle `false`, board while searching
+`false`, Import page empty `false`, Import page with pasted text `true`,
+add-listing form `true`.
+
 ## 2026-08-12 (share with photos)
 
 **Sharing a listing can now send its photos, not just the text.** Previously a
