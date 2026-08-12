@@ -32,10 +32,12 @@ export default function ShareMenu({
   const [open, setOpenState] = useState(false)
   const [copied, setCopied] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const { session } = useAuth()
+  const { profile } = useAuth()
   const selection = useShareSelection()
-  // Private rates stay private in shares too, unless the poster is sharing.
-  const canSeeRate = listing.rate_visible || listing.created_by === session?.user.id
+  // The contact on a shared listing is whoever is sharing it, never the
+  // original poster — see the note in share.ts. Rates never leave the app at
+  // all, so there is no rate-visibility check here any more.
+  const sharer = profile ? { name: profile.name, phone: profile.phone } : null
 
   const setOpen = (v: boolean) => {
     setOpenState(v)
@@ -56,12 +58,12 @@ export default function ShareMenu({
   }, [open])
 
   const handleWhatsApp = () => {
-    window.open(whatsappShareUrl(buildShareText(listing, canSeeRate)), '_blank', 'noopener')
+    window.open(whatsappShareUrl(buildShareText(listing, sharer)), '_blank', 'noopener')
     setOpen(false)
   }
 
   const handleCopy = async () => {
-    const ok = await copyText(buildShareText(listing, canSeeRate))
+    const ok = await copyText(buildShareText(listing, sharer))
     setCopied(ok)
     if (ok) setTimeout(() => setOpen(false), 900)
   }

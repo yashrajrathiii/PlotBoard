@@ -10,6 +10,36 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-12 (later)
+
+**Shares no longer leak prices, and route enquiries to the person sharing.**
+Both reported after the first day with real brokers, and both are commercially
+wrong on a board of competing agents.
+
+- **No price ever leaves the app** — not the rate, not the total, and not even
+  when the poster marked the rate public. There is deliberately **no parameter**
+  to switch this back on: `buildShareText` lost its `canSeeRate` argument
+  entirely rather than being passed `false`, so the guarantee is structural
+  instead of depending on every future caller passing the right flag. The
+  `formatINR`/`formatRateEntered` imports went with it — an absent import is a
+  signal to the next reader.
+  Members still see rates **inside** the app. Those gates
+  (`ListingCard`, `ListingDetailPage`, `MapViewPage`) are untouched: what a
+  member sees is a different question from what gets forwarded to an outsider.
+- **The contact is now the sharer, not the poster.** Forwarding someone else's
+  listing used to carry the original poster's number, routing the enquiry
+  straight past the broker who sent it. `useAuth().profile` already held the
+  current user's name and phone, so this needed no new query.
+- **The poster's `contact_type` is dropped from the share.** It describes
+  *their* relationship to the property, so printing "(Owner)" beside the
+  sharer's name would be actively misleading.
+
+Verified end-to-end on a real listing posted by **another user** with
+`rate_visible = true` — the strongest case, since the rate is public and the
+poster is someone else. Result: no rate, no total, no `₹`, poster's number
+absent, sharer's number present. Confirmed for both the single-listing menu and
+the multi-select bar (2 blocks, both contacts rewritten).
+
 ## 2026-08-12
 
 **The location search box now accepts pasted links and coordinates.** Reported

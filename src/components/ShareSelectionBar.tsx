@@ -12,7 +12,7 @@ import { buildMultiShareText, copyText, whatsappShareUrl } from '../lib/share'
  */
 export default function ShareSelectionBar() {
   const { active, selected, exit } = useShareSelection()
-  const { session } = useAuth()
+  const { profile } = useAuth()
   const location = useLocation()
   const [copied, setCopied] = useState(false)
 
@@ -24,11 +24,9 @@ export default function ShareSelectionBar() {
 
   if (!active) return null
 
-  const items = selected.map((l) => ({
-    listing: l,
-    canSeeRate: l.rate_visible || l.created_by === session?.user.id,
-  }))
-  const text = buildMultiShareText(items)
+  // One sharer for the whole batch — the person tapping share, not the posters.
+  const sharer = profile ? { name: profile.name, phone: profile.phone } : null
+  const text = buildMultiShareText(selected, sharer)
   const disabled = selected.length === 0
 
   const onCopy = async () => {

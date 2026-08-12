@@ -1,42 +1,58 @@
 import { addressOneLine, type Listing } from './types'
-import { formatAreaEntered, formatINR, formatFront, formatRateEntered } from './format'
+import { formatAreaEntered, formatFront } from './format'
+
+/**
+ * Whoever is doing the sharing — NOT the person who posted the listing.
+ * `useAuth().profile` supplies this; phone is 10 bare digits.
+ */
+export interface Sharer {
+  name: string
+  phone: string
+}
 
 /**
  * The text block shared via WhatsApp / clipboard. *asterisks* render as bold
  * in WhatsApp. Includes a Google Maps link to the exact pin.
- * When the poster keeps the rate private (rate_visible=false) and the person
- * sharing isn't the poster, rate and total are replaced with "On request".
+ *
+ * TWO RULES THAT ARE DELIBERATE AND MUST NOT BE "FIXED" BACK:
+ *
+ * 1. **No price ever leaves the app.** Not the rate, not the total, not even
+ *    when the poster marked the rate public. There is no parameter to switch
+ *    this on — the guarantee is structural, because a flag would eventually be
+ *    passed wrongly by some future caller. Members still see rates *inside*
+ *    the app; that gate lives in the card and detail views and is a separate
+ *    question from what gets forwarded to an outsider.
+ *
+ * 2. **The contact is the SHARER, not the poster.** On a board of competing
+ *    brokers, forwarding someone else's listing with the original poster's
+ *    number routes the enquiry straight past the person who sent it. The
+ *    poster's `contact_type` is deliberately omitted too: it describes *their*
+ *    relationship to the property, so printing it beside the sharer's name
+ *    would be actively misleading.
  */
-export function buildShareText(l: Listing, canSeeRate: boolean): string {
+export function buildShareText(l: Listing, sharer: Sharer | null): string {
   const lines = [
     `*${l.property_type} — ${l.address_line1}, ${l.city}*`,
     `Address: ${addressOneLine(l)}`,
     `Size: ${formatAreaEntered(l.area, l.area_unit)}`,
   ]
   if (l.front) lines.push(`Front: ${formatFront(l.front, l.front_unit)}`)
-  if (canSeeRate) {
-    lines.push(
-      `Rate: ${formatRateEntered(l.rate, l.rate_unit)}`,
-      `Total: ${formatINR(l.deal_value)}`,
-    )
-  } else {
-    lines.push('Rate: On request')
-  }
   lines.push(`Status: ${l.status}`)
   if (l.notes) lines.push(`Note: ${l.notes}`)
   lines.push(`Map: https://www.google.com/maps?q=${l.latitude},${l.longitude}`)
-  if (l.poster) {
-    lines.push(`Contact: ${l.poster.name} (${l.contact_type}) — +91 ${l.poster.phone}`)
+  if (sharer) {
+    lines.push(`Contact: ${sharer.name} — +91 ${sharer.phone}`)
   }
   return lines.join('\n')
 }
 
-/** Joins several listing blocks into one share message, divider between each. */
-export function buildMultiShareText(
-  items: { listing: Listing; canSeeRate: boolean }[],
-): string {
-  return items
-    .map((i) => buildShareText(i.listing, i.canSeeRate))
+/**
+ * Joins several listing blocks into one share message, divider between each.
+ * The sharer is the same person for every block, so it is taken once.
+ */
+export function buildMultiShareText(listings: Listing[], sharer: Sharer | null): string {
+  return listings
+    .map((l) => buildShareText(l, sharer))
     .join('\n\n———————————\n\n')
 }
 
