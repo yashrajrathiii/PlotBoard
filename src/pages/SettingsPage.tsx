@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
+  Bell,
   ChevronRight,
   KeyRound,
   LogOut,
@@ -11,13 +12,15 @@ import { supabase } from '../lib/supabase'
 import { useAuth, type DeviceRow } from '../context/AuthContext'
 import { getDeviceId } from '../lib/device'
 import { timeAgo } from '../lib/format'
+import { isMuted, playNotificationSound, setMuted } from '../lib/sound'
 import BackButton from '../components/BackButton'
 
-type Section = 'details' | 'account' | 'devices'
+type Section = 'details' | 'account' | 'alerts' | 'devices'
 
 const SECTIONS: { id: Section; label: string; sub: string; icon: LucideIcon }[] = [
   { id: 'details', label: 'Details', sub: 'Name & phone shown on your listings', icon: UserRound },
   { id: 'account', label: 'Account', sub: 'Email & password', icon: KeyRound },
+  { id: 'alerts', label: 'Notifications', sub: 'Sound for new alerts', icon: Bell },
   { id: 'devices', label: 'Devices', sub: 'Manage signed-in devices (max 2)', icon: MonitorSmartphone },
 ]
 
@@ -31,7 +34,15 @@ export default function SettingsPage() {
   const { signOut } = useAuth()
 
   const sectionContent = (id: Section) =>
-    id === 'details' ? <DetailsSection /> : id === 'account' ? <AccountSection /> : <DevicesSection />
+    id === 'details' ? (
+      <DetailsSection />
+    ) : id === 'account' ? (
+      <AccountSection />
+    ) : id === 'alerts' ? (
+      <AlertsSection />
+    ) : (
+      <DevicesSection />
+    )
 
   const activeLabel = active ? SECTIONS.find((s) => s.id === active)!.label : 'Settings'
 
@@ -113,6 +124,41 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AlertsSection() {
+  const [muted, setMutedState] = useState(isMuted())
+
+  return (
+    <div className="space-y-4">
+      <label className="flex items-start justify-between gap-3 cursor-pointer">
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-gray-900">Notification sound</span>
+          <span className="block text-xs text-gray-500 mt-0.5">
+            Plays a short chime when a new alert arrives while the app is open.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={!muted}
+          onChange={(e) => {
+            const on = e.target.checked
+            setMuted(!on)
+            setMutedState(!on)
+            // Play it on enable so the choice is audible immediately — and so
+            // the tap doubles as the gesture that unblocks audio.
+            if (on) playNotificationSound()
+          }}
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-gray-300 accent-emerald-600 focus:ring-emerald-500"
+        />
+      </label>
+      <p className="text-xs text-gray-400 leading-snug">
+        When the app is closed or in the background, your phone's own
+        notification sound is used instead — that setting lives in your phone,
+        not here.
+      </p>
     </div>
   )
 }

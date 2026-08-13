@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, Images, ListChecks, Share2 } from 'lucide-react'
 import type { Listing } from '../lib/types'
-import { buildShareText, copyText, whatsappShareUrl } from '../lib/share'
-import ShareWithPhotosDialog from './ShareWithPhotosDialog'
+import { buildShareText, copyText } from '../lib/share'
+import ShareDialog, { type ShareMode } from './ShareDialog'
 import { useAuth } from '../context/AuthContext'
 import { useShareSelection } from '../context/ShareSelectionContext'
 
@@ -32,7 +32,7 @@ export default function ShareMenu({
 }) {
   const [open, setOpenState] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [photoShare, setPhotoShare] = useState<Listing | null>(null)
+  const [share, setShare] = useState<{ listing: Listing; mode: ShareMode } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const { profile } = useAuth()
   const selection = useShareSelection()
@@ -61,13 +61,10 @@ export default function ShareMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const handleWhatsApp = () => {
-    window.open(whatsappShareUrl(buildShareText(listing, sharer)), '_blank', 'noopener')
-    setOpen(false)
-  }
-
+  // Copy takes the rate when the poster allows it — the clipboard is the
+  // sharer's own working copy, and buildShareText still refuses on a hidden rate.
   const handleCopy = async () => {
-    const ok = await copyText(buildShareText(listing, sharer))
+    const ok = await copyText(buildShareText(listing, sharer, { includeRate: true }))
     setCopied(ok)
     if (ok) setTimeout(() => setOpen(false), 900)
   }
@@ -89,7 +86,10 @@ export default function ShareMenu({
         // at the old width and would wrap.
         <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-white rounded-xl border border-gray-200 shadow-lg py-1">
           <button
-            onClick={handleWhatsApp}
+            onClick={() => {
+              setShare({ listing, mode: 'text' })
+              setOpen(false)
+            }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
           >
             <WhatsAppIcon /> Send text only
@@ -106,7 +106,7 @@ export default function ShareMenu({
           {hasMedia && (
             <button
               onClick={() => {
-                setPhotoShare(listing)
+                setShare({ listing, mode: 'photos' })
                 setOpen(false)
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -143,10 +143,11 @@ export default function ShareMenu({
         </div>
       )}
 
-      <ShareWithPhotosDialog
-        listing={photoShare}
+      <ShareDialog
+        listing={share?.listing ?? null}
+        mode={share?.mode ?? 'text'}
         sharer={sharer}
-        onClose={() => setPhotoShare(null)}
+        onClose={() => setShare(null)}
       />
     </div>
   )

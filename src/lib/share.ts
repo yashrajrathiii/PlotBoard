@@ -1,5 +1,5 @@
 import { addressOneLine, type Listing } from './types'
-import { formatAreaEntered, formatFront } from './format'
+import { formatAreaEntered, formatFront, formatRateEntered } from './format'
 
 /**
  * Whoever is doing the sharing — NOT the person who posted the listing.
@@ -14,26 +14,32 @@ export interface Sharer {
  * The text block shared via WhatsApp / clipboard. *asterisks* render as bold
  * in WhatsApp. Includes a Google Maps link to the exact pin.
  *
- * TWO RULES THAT ARE DELIBERATE AND MUST NOT BE "FIXED" BACK:
+ * THREE RULES THAT ARE DELIBERATE AND MUST NOT BE "FIXED" BACK:
  *
- * 1. **No price ever leaves the app.** Not the rate, not the total, not even
- *    when the poster marked the rate public. There is no parameter to switch
- *    this on — the guarantee is structural, because a flag would eventually be
- *    passed wrongly by some future caller. Members still see rates *inside*
- *    the app; that gate lives in the card and detail views and is a separate
- *    question from what gets forwarded to an outsider.
+ * 1. **The deal value NEVER leaves the app.** There is no option for it. What a
+ *    property totals is the poster's business and an outsider can work it out
+ *    from the rate and the size if they need to.
  *
- * 2. **The contact is the SHARER, not the poster.** On a board of competing
+ * 2. **The rate leaves only on a double yes.** The sharer must opt in, AND the
+ *    poster must have left the rate visible. That second test lives *inside*
+ *    this function rather than at the call sites, so no caller can share a
+ *    hidden rate by passing the wrong flag — the same reasoning that previously
+ *    kept prices out altogether, narrowed rather than abandoned.
+ *
+ * 3. **The contact is the SHARER, not the poster.** On a board of competing
  *    brokers, forwarding someone else's listing with the original poster's
  *    number routes the enquiry straight past the person who sent it. The
  *    poster's `contact_type` is deliberately omitted too: it describes *their*
  *    relationship to the property, so printing it beside the sharer's name
  *    would be actively misleading.
+ *
+ * The listing's private third-party contact is not reachable from here at all:
+ * it lives in its own RLS-scoped table and never appears on `Listing`.
  */
 export function buildShareText(
   l: Listing,
   sharer: Sharer | null,
-  opts: { videoIncluded?: boolean } = {},
+  opts: { videoIncluded?: boolean; includeRate?: boolean } = {},
 ): string {
   const lines = [
     `*${l.property_type} — ${l.address_line1}, ${l.city}*`,
@@ -41,6 +47,13 @@ export function buildShareText(
     `Size: ${formatAreaEntered(l.area, l.area_unit)}`,
   ]
   if (l.front) lines.push(`Front: ${formatFront(l.front, l.front_unit)}`)
+  // The double yes: the sharer asked for it AND the poster left it visible.
+  // `rate_visible` is checked HERE, never at the call site — a caller passing
+  // includeRate on a listing whose poster hid the rate still gets nothing.
+  // Note this deliberately emits the RATE only; `deal_value` has no option.
+  if (opts.includeRate && l.rate_visible) {
+    lines.push(`Rate: ${formatRateEntered(l.rate, l.rate_unit)}`)
+  }
   // Mention a walkthrough video the recipient isn't getting, so they know to
   // ask. Suppressed when the video is actually attached to this share.
   const hasVideo = l.listing_media.some((m) => m.media_type === 'video')

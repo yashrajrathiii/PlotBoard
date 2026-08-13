@@ -51,7 +51,14 @@ function PosterRow({ listing }: { listing: Listing }) {
     <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
       <span className="flex items-center gap-1.5 text-xs text-gray-600 min-w-0">
         <UserRound size={13} className="shrink-0 text-gray-400" />
-        <span className="truncate">{listing.poster?.name || 'Member'}</span>
+        {/* The poster's name is what a broker scans for first — who is this
+            lead from? Raised to sm/semibold while the separator and contact
+            type stay 12px, so the name stands out rather than the whole row
+            growing. It is the only truncating element, so the extra size just
+            truncates a little sooner at 375px; nothing wraps. */}
+        <span className="truncate text-sm font-semibold text-gray-900">
+          {listing.poster?.name || 'Member'}
+        </span>
         <span className="text-gray-300">·</span>
         <span className="shrink-0 text-gray-500">{listing.contact_type}</span>
       </span>

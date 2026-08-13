@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   EyeOff,
@@ -12,6 +12,7 @@ import {
 import { useListing } from '../hooks/useListing'
 import { useAuth } from '../context/AuthContext'
 import { deleteListing } from '../lib/listingActions'
+import { getPrivateContact, type PrivateContact } from '../lib/privateContact'
 import { addressLines } from '../lib/types'
 import {
   formatAreaEntered,
@@ -45,6 +46,21 @@ export default function ListingDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [privateContact, setPrivateContact] = useState<PrivateContact | null>(null)
+
+  // RLS returns nothing to a non-owner, so this is safe to call unconditionally
+  // — the server decides, not the component. Hooks must run before the early
+  // returns below, hence the `id` guard rather than a `listing` one.
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    void getPrivateContact(id).then((c) => {
+      if (!cancelled) setPrivateContact(c)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   if (loading) return <FullScreenSpinner />
 
@@ -197,6 +213,37 @@ export default function ListingDetailPage() {
               </a>
             )}
           </div>
+
+          {/* The poster's own note on who they're dealing with. Fetched from a
+              table whose RLS is scoped to the listing's creator, so a non-owner
+              gets null from the server — the `isOwner` test here is belt and
+              braces, not the protection. */}
+          {isOwner && privateContact && (privateContact.name || privateContact.phone) && (
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="bg-amber-100 text-amber-700 rounded-full p-2">
+                  <Lock size={16} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-900 truncate">
+                    {privateContact.name || 'No name'}
+                  </span>
+                  <span className="block text-xs text-amber-800">
+                    {listing.contact_type === 'Direct' ? 'Owner' : 'Broker'} · private to you
+                    {privateContact.phone ? ` · +91 ${privateContact.phone}` : ''}
+                  </span>
+                </span>
+              </span>
+              {privateContact.phone && (
+                <a
+                  href={`tel:+91${privateContact.phone}`}
+                  className="shrink-0 flex items-center gap-1.5 border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 text-sm font-medium rounded-lg px-3 py-2"
+                >
+                  <Phone size={15} /> Call
+                </a>
+              )}
+            </div>
+          )}
 
           {/* Owner actions — inside the listing view */}
           {isOwner && (

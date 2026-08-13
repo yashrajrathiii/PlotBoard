@@ -10,6 +10,97 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-13
+
+**Private broker contacts, shareable rates, WhatsApp account choice, and a
+notification sound.** Five changes from the second round of real broker use.
+
+### The finding that reshaped the private-contact feature
+
+Two ordinary columns on `listings` would have leaked the broker's name and
+phone to **every one of the twenty competing brokers**, in plain JSON, on their
+first board load. This codebase has no per-column privacy: the SELECT policy is
+row-level (007), the grant is whole-table (002), every read is `select('*')`,
+and `listings` is in the realtime publication — which ships whole rows
+regardless of what the UI renders. `rate_visible` is not a precedent to copy;
+migration 006 calls it "a courtesy curtain, not cryptographic secrecy".
+
+So the data lives in **`listing_private_contacts`** (migration 014), a separate
+table whose single RLS policy scopes every verb to
+`listings.created_by = auth.uid()`. It is deliberately **not** in the realtime
+publication, and `anon` is revoked outright rather than left to RLS alone —
+Supabase's default schema privileges hand every role full DML on a new table,
+and the most sensitive data in the app should not rest on one mechanism.
+
+Proven, not assumed: the same query under two JWTs. The owner gets the row;
+**Niraj — a real member with 31 visible listings — gets zero.** The listings
+count is the control, ruling out a broken session.
+
+- Fields appear only for `Broker`/`Direct` (on `Owner` the poster *is* the
+  contact), and are **optional** — nullable, `(optional)` labelled, phone
+  validated only when non-empty, and no row written when both are blank.
+- Labels follow the real relationship: `Broker` → the broker's details,
+  `Direct` → the **owner's** details.
+- **Switching to `Owner` deletes the row.** Otherwise a listing changed from
+  Broker to Owner keeps a third party's phone number the form no longer shows.
+- `share.ts` cannot reach it: the share text is built from `Listing`, which has
+  no such field.
+
+### Rate sharing — a narrowing of the old rule, not an abandonment
+
+`share.ts` previously stated that no price ever leaves the app and that there
+was deliberately no parameter to switch it on. That comment is rewritten rather
+than quietly contradicted. The new rule:
+
+> The **rate** may be shared on a double yes — the sharer opts in **and** the
+> poster left it visible. The **deal value is still never shared**, with no
+> option at all.
+
+The `rate_visible` test lives **inside** `buildShareText`, never at a call site,
+so no caller can share a hidden rate by passing the wrong flag. Verified: with
+`includeRate: true` on a hidden-rate listing the output contains no rate, no
+`₹`, and no deal value.
+
+### One dialog, two modes
+
+`ShareWithPhotosDialog` became `ShareDialog` with `mode: 'text' | 'photos'`.
+Both paths need the same rate tick, clipboard copy, send button and outcome
+handling; duplicating that is how the two would have drifted apart.
+
+Text-only now goes through **`navigator.share({ text })`** — the OS sheet — so a
+broker with WhatsApp *and* WhatsApp Business can choose which sends. A
+`wa.me` link cannot express that; it just opens the default handler, with no
+parameter for the sending account. The wa.me link remains the fallback where
+Web Share is missing, so nothing regresses. **No Settings preference**: it was
+considered and dropped, because a setting cannot target an account either.
+
+Caught in review: the Send button was gated on `files.length > 0`, which left
+it permanently disabled in text mode, where there are no files by definition.
+
+### Notification sound
+
+A two-note chime synthesised with the Web Audio API — no audio asset, nothing
+added to a bundle brokers download on mobile data, and it works offline. Every
+failure is swallowed: audio is gesture-gated, so the first chime after a cold
+start may be silent, and a suspended context must never stop a notification
+appearing. Verified by counting oscillator starts: **2 when unmuted, 0 when
+muted.**
+
+Plays for the **in-app toast only**. When the app is backgrounded the OS
+notification fires instead, and its sound is the phone's to choose —
+`showNotification` has no custom-sound option on Android Chrome. A Settings
+toggle mutes it, because a sound with no off switch is a guaranteed complaint
+from at least one of twenty brokers.
+
+### Smaller
+
+- The poster's name on cards is now `text-sm font-semibold text-gray-900` — it
+  is what a broker scans for first. One `PosterRow` serves both layouts and My
+  Listings, so a single edit covered every surface.
+- Checkboxes were rendering in the browser's default **purple**: `text-emerald-600`
+  does not style a native checkbox without the Forms plugin. Switched to
+  `accent-emerald-600` across the share dialog and settings.
+
 ## 2026-08-12 (rate shorthand)
 
 **The rate field now takes `5.5k`, `4L`, `1Cr`, and offers K / L / Cr chips.**

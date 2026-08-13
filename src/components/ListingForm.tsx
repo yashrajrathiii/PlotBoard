@@ -29,6 +29,7 @@ import {
   type Magnitude,
 } from '../lib/amount'
 import { formatINRCompact, formatRateEntered } from '../lib/format'
+import { getPrivateContact, savePrivateContact } from '../lib/privateContact'
 import BackButton from './BackButton'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -122,6 +123,19 @@ export default function ListingForm({
   const [contactType, setContactType] = useState<ContactType>(
     existing?.contact_type ?? initial?.contact_type ?? 'Broker',
   )
+  // The third party's details. Loaded separately from the listing because they
+  // live in their own RLS-protected table — see privateContact.ts.
+  const [privateName, setPrivateName] = useState('')
+  const [privatePhone, setPrivatePhone] = useState('')
+
+  /**
+   * Who the private contact actually is, which is NOT the contact_type value.
+   * `Broker` means there is a broker in the chain, so you store the broker.
+   * `Direct` means you deal with the owner directly, so you store the owner.
+   * (`Owner` means you ARE the contact, so there is nobody to store — those
+   * fields are hidden entirely.)
+   */
+  const thirdParty = contactType === 'Direct' ? 'Owner' : 'Broker'
   const [status, setStatus] = useState<ListingStatus>(existing?.status ?? 'Available')
   const [coords, setCoords] = useState<LatLng | null>(
     existing
@@ -153,6 +167,22 @@ export default function ListingForm({
     return () => photos.forEach((p) => URL.revokeObjectURL(p.preview))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Load the private contact when editing. RLS returns nothing to a non-owner,
+  // so this needs no ownership check — and EditListingPage already refuses to
+  // render the form for anyone else.
+  useEffect(() => {
+    if (!existing) return
+    let cancelled = false
+    void getPrivateContact(existing.id).then((c) => {
+      if (cancelled || !c) return
+      setPrivateName(c.name)
+      setPrivatePhone(c.phone)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [existing])
 
   const addPhotos = async (files: FileList | null) => {
     if (!files) return
@@ -256,6 +286,13 @@ export default function ListingForm({
     if (front.trim() && (!frontNum || frontNum <= 0)) {
       return setError('Front must be a positive number, or leave it empty.')
     }
+    // Optional, so validated only when something was actually typed — the
+    // `pincode` pattern above. A blank number must never block a quick post.
+    if (privatePhone.trim() && !/^[6-9]\d{9}$/.test(privatePhone.trim())) {
+      return setError(
+        `The ${thirdParty.toLowerCase()}'s mobile must be 10 digits, or leave it empty.`,
+      )
+    }
     if (!coords) return setError('Drop the location pin on the map.')
 
     setSubmitting(true)
@@ -306,6 +343,15 @@ export default function ListingForm({
       }
       listingId = listing.id
     }
+
+    // The private contact lives in its own table, so it saves after the listing
+    // row exists. Passing null when the type is `Owner` DELETES any previous
+    // row — otherwise a listing switched Broker → Owner would silently retain a
+    // third party's phone number that the form no longer shows.
+    await savePrivateContact(
+      listingId,
+      contactType === 'Owner' ? null : { name: privateName, phone: privatePhone },
+    )
 
     // Upload new media after the listing row exists; failures downgrade to a
     // warning so the listing itself is never lost.
@@ -517,6 +563,48 @@ export default function ListingForm({
               </select>
             </Field>
           </div>
+
+          {/* Who the poster is actually dealing with. Only meaningful when a
+              third party is involved — on `Owner` the poster IS the contact.
+              Both fields are optional and must never block a quick post.
+              Stored in `listing_private_contacts`, which is RLS-scoped to the
+              listing's creator, so this never reaches another member or a
+              share. */}
+          {contactType !== 'Owner' && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                <Lock size={12} className="text-gray-400" />
+                {thirdParty}'s details — private to you, never shared
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Just "Name": the panel heading above already says whose.
+                    "Owner name (optional)" wrapped to two lines and pushed this
+                    input below the Mobile one. */}
+                <Field label="Name" optional>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh"
+                    value={privateName}
+                    onChange={(e) => setPrivateName(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Mobile" optional>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="10-digit mobile"
+                    value={privatePhone}
+                    onChange={(e) =>
+                      setPrivatePhone(e.target.value.replace(/\D/g, '').slice(0, 10))
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
           {isEdit && (
             <Field label="Status">
               <select

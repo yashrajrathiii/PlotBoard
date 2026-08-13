@@ -201,6 +201,36 @@ export function canShareFiles(): boolean {
 export type ShareOutcome = 'shared' | 'cancelled' | 'unsupported' | 'failed'
 
 /**
+ * Share plain text through the OS share sheet.
+ *
+ * This exists so a broker with two WhatsApp accounts can choose which one
+ * sends. A `wa.me` / `whatsapp://` link cannot express that — it just opens
+ * whichever WhatsApp is the default handler, with no parameter for the sending
+ * account. The system sheet is the only mechanism that lists WhatsApp and
+ * WhatsApp Business as separate targets.
+ *
+ * Returns 'unsupported' where there is no Web Share (desktop Firefox, older
+ * Chrome) so the caller can fall back to the wa.me link and nothing regresses.
+ */
+export async function shareText(text: string): Promise<ShareOutcome> {
+  if (typeof navigator.share !== 'function') return 'unsupported'
+  try {
+    await navigator.share({ text })
+    return 'shared'
+  } catch (e) {
+    // Dismissing the sheet rejects with AbortError — a decision, not a failure.
+    if ((e as DOMException)?.name === 'AbortError') return 'cancelled'
+    console.debug('[LD Board] text share failed:', e)
+    return 'failed'
+  }
+}
+
+/** Whether the OS sheet is available for plain text. */
+export function canShareText(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+}
+
+/**
  * Hand the files to the OS share sheet.
  *
  * MUST be called inside a fresh user gesture — `navigator.share` requires

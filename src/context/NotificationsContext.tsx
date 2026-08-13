@@ -11,6 +11,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { notificationTitle, showSystemNotification } from '../lib/notify'
+import { playNotificationSound } from '../lib/sound'
 
 export interface AppNotification {
   id: number
@@ -82,6 +83,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           seenIds.current.add(n.id)
           setNotifications((prev) => [n, ...prev])
           setToast(n)
+          // Only for the in-app toast. When the app is backgrounded the OS
+          // notification below fires instead, and its sound is the phone's to
+          // choose — showNotification has no custom-sound option on Android
+          // Chrome. Playing both would double up when the app is in front.
+          playNotificationSound()
           void showSystemNotification(notificationTitle(n.type), n.message)
         },
       )

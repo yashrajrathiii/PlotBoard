@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Images, Loader2, TriangleAlert } from 'lucide-react'
+import { Check, Images, Loader2, MessageSquareText, TriangleAlert } from 'lucide-react'
 import type { Listing } from '../lib/types'
-import { buildShareText, copyText, type Sharer } from '../lib/share'
-import { canShareFiles, listingShareFiles, shareFiles } from '../lib/shareMedia'
+import { buildShareText, copyText, whatsappShareUrl, type Sharer } from '../lib/share'
+import { formatRateEntered } from '../lib/format'
+import {
+  canShareFiles,
+  listingShareFiles,
+  shareFiles,
+  shareText as shareTextViaSheet,
+} from '../lib/shareMedia'
 
 /**
  * Whether this browser will accept files in a share sheet. Evaluated once — it
@@ -16,26 +22,34 @@ import { canShareFiles, listingShareFiles, shareFiles } from '../lib/shareMedia'
 const CAN_SHARE_FILES = canShareFiles()
 
 /**
- * "Share with photos" sheet.
+ * The share sheet, for both text-only and with-photos.
  *
- * Exists as a two-step flow for a reason that cannot be designed around:
- * `navigator.share()` requires **transient user activation**, and fetching plus
- * converting the photos takes a second or two. Doing both in one handler throws
- * NotAllowedError, so tap 1 opens this sheet and starts fetching, and tap 2 on
- * "Send to WhatsApp" performs the share inside a fresh gesture.
+ * ONE dialog rather than two because both paths need exactly the same things:
+ * the rate opt-in, the clipboard copy, the send button, and the outcome
+ * handling. Duplicating that was how the rate tick would have drifted between
+ * them.
  *
- * The sheet earns that second tap by also hosting the video opt-in and the
- * clipboard notice.
+ * It is a two-step flow for a reason that cannot be designed around:
+ * `navigator.share()` requires **transient user activation**. In photos mode,
+ * fetching and converting takes a second or two, so doing both in one handler
+ * throws NotAllowedError. Tap 1 opens this sheet, tap 2 shares inside a fresh
+ * gesture. Text mode inherits the same shape, which is what gives it an OS
+ * share sheet — and therefore a choice of WhatsApp account — instead of a
+ * wa.me link that always opens the default one.
  */
 
 type Phase = 'preparing' | 'ready' | 'sharing' | 'done' | 'error' | 'unsupported'
 
-export default function ShareWithPhotosDialog({
+export type ShareMode = 'text' | 'photos'
+
+export default function ShareDialog({
   listing,
+  mode,
   sharer,
   onClose,
 }: {
   listing: Listing | null
+  mode: ShareMode
   sharer: Sharer | null
   onClose: () => void
 }) {
@@ -48,7 +62,13 @@ export default function ShareWithPhotosDialog({
   const [copiedOnly, setCopiedOnly] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
+  // On by default, as agreed — but a listing whose poster hid the rate can
+  // never share it, so the box starts (and stays) off there.
+  const rateShareable = listing?.rate_visible ?? false
+  const [includeRate, setIncludeRate] = useState(true)
+
   const open = listing !== null
+  const withPhotos = mode === 'photos'
   const hasVideo = listing?.listing_media.some((m) => m.media_type === 'video') ?? false
 
   const close = useCallback(() => {
@@ -78,6 +98,16 @@ export default function ShareWithPhotosDialog({
       setPhase('preparing')
       setFiles([])
       setMessage(null)
+      return
+    }
+    // Text mode has nothing to fetch — it is ready the moment it opens. The
+    // wa.me fallback means it works even without Web Share, so unlike photos
+    // there is no unsupported state to reach.
+    if (!withPhotos) {
+      setFiles([])
+      setSkipped(0)
+      setMessage(null)
+      setPhase('ready')
       return
     }
     // No point downloading photos this browser can never attach. Say so
@@ -117,11 +147,14 @@ export default function ShareWithPhotosDialog({
       })
 
     return () => controller.abort()
-  }, [listing, includeVideo])
+  }, [listing, includeVideo, withPhotos])
 
   if (!listing) return null
 
-  const text = buildShareText(listing, sharer, { videoIncluded: includeVideo })
+  const text = buildShareText(listing, sharer, {
+    videoIncluded: includeVideo,
+    includeRate,
+  })
   const totalBytes = files.reduce((n, f) => n + f.size, 0)
 
   /** Fallback when the browser can't attach files at all. */
@@ -137,6 +170,30 @@ export default function ShareWithPhotosDialog({
     // several images are attached, so the clipboard — not the share payload —
     // is what actually guarantees the details survive.
     await copyText(text)
+
+    if (!withPhotos) {
+      const outcome = await shareTextViaSheet(text)
+      if (outcome === 'unsupported') {
+        // No Web Share (desktop Firefox, older Chrome): fall back to the
+        // wa.me link so text sharing never regresses — it just opens the
+        // default WhatsApp rather than offering a choice of account.
+        window.open(whatsappShareUrl(text), '_blank', 'noopener')
+        setPhase('done')
+        setMessage('Opened WhatsApp. Details are on your clipboard too.')
+        setTimeout(close, 2200)
+      } else if (outcome === 'shared') {
+        setPhase('done')
+        setMessage('Sent. Details are on your clipboard as well.')
+        setTimeout(close, 2200)
+      } else if (outcome === 'cancelled') {
+        setPhase('ready')
+      } else {
+        setPhase('error')
+        setMessage('Sending failed. Details are copied to your clipboard.')
+      }
+      return
+    }
+
     const outcome = await shareFiles(files, text)
     if (outcome === 'shared') {
       setPhase('done')
@@ -179,11 +236,11 @@ export default function ShareWithPhotosDialog({
       >
         <div className="flex items-start gap-3">
           <span className="shrink-0 bg-emerald-100 text-emerald-700 rounded-full p-2">
-            <Images size={18} />
+            {withPhotos ? <Images size={18} /> : <MessageSquareText size={18} />}
           </span>
           <div className="min-w-0">
             <h2 id="share-photos-title" className="text-base font-semibold text-gray-900">
-              Share with photos
+              {withPhotos ? 'Share with photos' : 'Share details'}
             </h2>
             <p className="text-sm text-gray-600 mt-0.5 leading-snug truncate">
               {listing.address_line1}, {listing.city}
@@ -192,6 +249,32 @@ export default function ShareWithPhotosDialog({
         </div>
 
         <div className="mt-4 space-y-3">
+          {/* The rate opt-in. On by default, but a poster who hid their rate
+              has already answered this question — the box is then disabled and
+              forced off, so the eye toggle means one clear thing: is this rate
+              shareable at all? The deal value has no option and never appears. */}
+          <label
+            className={`flex items-start gap-2.5 text-sm ${
+              rateShareable ? 'text-gray-700 cursor-pointer' : 'text-gray-400'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={rateShareable && includeRate}
+              disabled={!rateShareable || phase === 'sharing'}
+              onChange={(e) => setIncludeRate(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+            />
+            <span>
+              Include the rate
+              <span className="block text-xs text-gray-500">
+                {rateShareable
+                  ? `${formatRateEntered(listing.rate, listing.rate_unit)} — the total is never shared`
+                  : 'The poster keeps this rate private'}
+              </span>
+            </span>
+          </label>
+
           {phase === 'preparing' ? (
             <p className="flex items-center gap-2 text-sm text-gray-600">
               <Loader2 size={15} className="animate-spin text-emerald-600" />
@@ -214,7 +297,7 @@ export default function ShareWithPhotosDialog({
                 checked={includeVideo}
                 onChange={(e) => setIncludeVideo(e.target.checked)}
                 disabled={phase === 'sharing'}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-emerald-600 focus:ring-emerald-500"
               />
               <span>
                 Also send the video
@@ -276,7 +359,9 @@ export default function ShareWithPhotosDialog({
             <button
               type="button"
               onClick={() => void handleSend()}
-              disabled={busy || files.length === 0 || phase === 'done'}
+              // Only photos mode needs files. Text mode has none by definition,
+              // so gating on `files.length` there left the button dead.
+              disabled={busy || (withPhotos && files.length === 0) || phase === 'done'}
               className="flex-1 bg-[#25D366] hover:brightness-95 text-white text-sm font-medium rounded-lg py-2.5 disabled:opacity-50"
             >
               {phase === 'sharing' ? 'Sending…' : 'Send to WhatsApp'}
