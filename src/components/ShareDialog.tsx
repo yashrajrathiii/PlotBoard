@@ -290,7 +290,9 @@ export default function ShareDialog({
             )
           )}
 
-          {hasVideo && (
+          {/* Photos mode only: text mode attaches nothing, so offering to send
+              the video there is an option that cannot do anything. */}
+          {withPhotos && hasVideo && (
             <label className="flex items-start gap-2.5 text-sm text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
