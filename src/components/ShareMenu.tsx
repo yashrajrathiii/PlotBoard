@@ -144,7 +144,7 @@ export default function ShareMenu({
       )}
 
       <ShareDialog
-        listing={share?.listing ?? null}
+        listings={share ? [share.listing] : null}
         mode={share?.mode ?? 'text'}
         sharer={sharer}
         onClose={() => setShare(null)}

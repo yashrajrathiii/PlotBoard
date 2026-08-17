@@ -3,7 +3,8 @@ import { useLocation } from 'react-router-dom'
 import { Check, Copy, Share2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useShareSelection } from '../context/ShareSelectionContext'
-import { buildMultiShareText, copyText, whatsappShareUrl } from '../lib/share'
+import { buildMultiShareText, copyText } from '../lib/share'
+import ShareDialog from './ShareDialog'
 
 /**
  * Bottom bar shown while multi-select is active (like WhatsApp's selection
@@ -15,6 +16,7 @@ export default function ShareSelectionBar() {
   const { profile } = useAuth()
   const location = useLocation()
   const [copied, setCopied] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   // Leaving the page cancels selection so it can't linger with stale cards.
   useEffect(() => {
@@ -26,19 +28,14 @@ export default function ShareSelectionBar() {
 
   // One sharer for the whole batch — the person tapping share, not the posters.
   const sharer = profile ? { name: profile.name, phone: profile.phone } : null
-  const text = buildMultiShareText(selected, sharer)
   const disabled = selected.length === 0
 
+  // Copy takes rates where the posters allow it; buildMultiShareText asks each
+  // listing individually, so a mixed selection needs no branching here.
   const onCopy = async () => {
-    const ok = await copyText(text)
+    const ok = await copyText(buildMultiShareText(selected, sharer, { includeRate: true }))
     setCopied(ok)
     if (ok) setTimeout(() => setCopied(false), 1500)
-  }
-
-  const onWhatsApp = () => {
-    // suppressPreview: stop WhatsApp from heading the message with just the
-    // first listing's map preview card.
-    window.open(whatsappShareUrl(text, true), '_blank', 'noopener')
   }
 
   return (
@@ -72,15 +69,26 @@ export default function ShareSelectionBar() {
               </>
             )}
           </button>
+          {/* Opens the same dialog the single-listing share uses, so the batch
+              gets the rate opt-in and the OS share sheet — and therefore a
+              choice of WhatsApp account — rather than a wa.me link that always
+              opens the default one. */}
           <button
-            onClick={onWhatsApp}
+            onClick={() => setSharing(true)}
             disabled={disabled}
             className="flex items-center gap-1.5 bg-[#25D366] hover:brightness-95 disabled:opacity-40 text-white text-sm font-medium rounded-lg px-3 py-2"
           >
-            <Share2 size={15} /> WhatsApp
+            <Share2 size={15} /> Share
           </button>
         </div>
       </div>
+
+      <ShareDialog
+        listings={sharing ? selected : null}
+        mode="text"
+        sharer={sharer}
+        onClose={() => setSharing(false)}
+      />
     </div>
   )
 }

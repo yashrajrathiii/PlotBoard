@@ -71,9 +71,17 @@ export function buildShareText(
  * Joins several listing blocks into one share message, divider between each.
  * The sharer is the same person for every block, so it is taken once.
  */
-export function buildMultiShareText(listings: Listing[], sharer: Sharer | null): string {
+export function buildMultiShareText(
+  listings: Listing[],
+  sharer: Sharer | null,
+  opts: { includeRate?: boolean } = {},
+): string {
+  // `includeRate` is a single request applied to every block, and each block
+  // then answers for itself — buildShareText checks that listing's own
+  // `rate_visible`. So a mixed selection needs no special handling: the ones
+  // with public rates carry them, the hidden ones quietly don't.
   return listings
-    .map((l) => buildShareText(l, sharer))
+    .map((l) => buildShareText(l, sharer, { includeRate: opts.includeRate }))
     .join('\n\n———————————\n\n')
 }
 

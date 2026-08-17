@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Images, Loader2, MessageSquareText, TriangleAlert } from 'lucide-react'
 import type { Listing } from '../lib/types'
-import { buildShareText, copyText, whatsappShareUrl, type Sharer } from '../lib/share'
+import {
+  buildMultiShareText,
+  buildShareText,
+  copyText,
+  whatsappShareUrl,
+  type Sharer,
+} from '../lib/share'
 import { formatRateEntered } from '../lib/format'
 import {
   canShareFiles,
@@ -43,12 +49,13 @@ type Phase = 'preparing' | 'ready' | 'sharing' | 'done' | 'error' | 'unsupported
 export type ShareMode = 'text' | 'photos'
 
 export default function ShareDialog({
-  listing,
+  listings,
   mode,
   sharer,
   onClose,
 }: {
-  listing: Listing | null
+  /** Null or empty closes the dialog. Photos mode is always exactly one. */
+  listings: Listing[] | null
   mode: ShareMode
   sharer: Sharer | null
   onClose: () => void
@@ -62,14 +69,20 @@ export default function ShareDialog({
   const [copiedOnly, setCopiedOnly] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
-  // On by default, as agreed — but a listing whose poster hid the rate can
-  // never share it, so the box starts (and stays) off there.
-  const rateShareable = listing?.rate_visible ?? false
   const [includeRate, setIncludeRate] = useState(true)
 
-  const open = listing !== null
+  const items = listings ?? []
+  const open = items.length > 0
+  const listing = items[0] ?? null
+  const multi = items.length > 1
   const withPhotos = mode === 'photos'
   const hasVideo = listing?.listing_media.some((m) => m.media_type === 'video') ?? false
+
+  // On by default, as agreed. Offering the tick only makes sense if at least
+  // one selected listing actually has a public rate — with none, it would be a
+  // control that provably does nothing.
+  const shareableCount = items.filter((l) => l.rate_visible).length
+  const rateShareable = shareableCount > 0
 
   const close = useCallback(() => {
     abortRef.current?.abort()
@@ -151,10 +164,9 @@ export default function ShareDialog({
 
   if (!listing) return null
 
-  const text = buildShareText(listing, sharer, {
-    videoIncluded: includeVideo,
-    includeRate,
-  })
+  const text = multi
+    ? buildMultiShareText(items, sharer, { includeRate })
+    : buildShareText(listing, sharer, { videoIncluded: includeVideo, includeRate })
   const totalBytes = files.reduce((n, f) => n + f.size, 0)
 
   /** Fallback when the browser can't attach files at all. */
@@ -243,7 +255,9 @@ export default function ShareDialog({
               {withPhotos ? 'Share with photos' : 'Share details'}
             </h2>
             <p className="text-sm text-gray-600 mt-0.5 leading-snug truncate">
-              {listing.address_line1}, {listing.city}
+              {multi
+                ? `${items.length} properties`
+                : `${listing.address_line1}, ${listing.city}`}
             </p>
           </div>
         </div>
@@ -267,10 +281,19 @@ export default function ShareDialog({
             />
             <span>
               Include the rate
+              {/* For a batch, say how many will actually carry a rate. A
+                  selection where some posters hid theirs still shares the rest
+                  — silently dropping them would look like a bug. */}
               <span className="block text-xs text-gray-500">
-                {rateShareable
-                  ? `${formatRateEntered(listing.rate, listing.rate_unit)} — the total is never shared`
-                  : 'The poster keeps this rate private'}
+                {!rateShareable
+                  ? multi
+                    ? 'None of these posters share their rate'
+                    : 'The poster keeps this rate private'
+                  : multi
+                    ? shareableCount === items.length
+                      ? 'The total is never shared'
+                      : `${shareableCount} of ${items.length} — the rest keep their rate private`
+                    : `${formatRateEntered(listing.rate, listing.rate_unit)} — the total is never shared`}
               </span>
             </span>
           </label>

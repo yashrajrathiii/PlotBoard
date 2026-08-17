@@ -10,6 +10,37 @@ session, with bullets for what shipped and *why* where it matters.
 
 ---
 
+## 2026-08-13 (multi-share)
+
+**Multi-select share now gets the rate tick and the OS share sheet too.**
+Previously it went straight out through a `wa.me` link with no options, so the
+two share paths had diverged the moment single-listing share gained a dialog.
+
+`ShareDialog` now takes `listings: Listing[]` rather than one listing, so the
+batch reuses the same dialog — rate opt-in, clipboard copy, send button, outcome
+handling — instead of a parallel implementation that would drift again.
+
+**Mixed rate visibility needed no special handling**, which is the payoff of an
+earlier decision: `buildShareText` checks each listing's own `rate_visible`
+internally, so `includeRate` is one request that every block answers for itself.
+Select three listings where one poster hid their rate, and the two public ones
+carry theirs while the third quietly doesn't.
+
+The tick's label states this rather than leaving it to be discovered —
+*"2 of 3 — the rest keep their rate private"* — because a rate silently missing
+from one block in a batch looks like a bug. When no selected listing has a
+public rate the tick is disabled outright: a control that provably cannot do
+anything shouldn't invite a tap.
+
+Verified against a 3-listing mixture (public / hidden / public): ticked yields
+exactly two `Rate:` lines and two `₹`, unticked yields zero, and the deal value
+appears in neither. In the UI: "3 properties", tick on by default, correct
+"2 of 3" hint, and no video option (text mode attaches nothing).
+
+The selection bar's WhatsApp button is now labelled **Share**, since it opens
+the system sheet rather than jumping straight into WhatsApp. Copy is unchanged
+and still instant — no dialog for something that takes one tap.
+
 ## 2026-08-13
 
 **Private broker contacts, shareable rates, WhatsApp account choice, and a
